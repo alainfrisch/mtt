@@ -25,6 +25,21 @@ type node = Unique.t _node
 type node_var = Unique.t _node_var
 type var = Unique.t _var
 
+
+(* Map from levels to variables *)
+
+let maxvar = ref 100
+let levels = ref (Weak.create !maxvar)
+let max_level = ref 0
+
+let new_var () =
+  let v = { level = !max_level; unique = Unique.create 32 } in
+  incr max_level;
+  Weak.set levels v.level v
+
+
+
+
 let node_of_node_var : node_var -> node = Obj.magic
 
 let cur_uid = ref 0
@@ -81,11 +96,6 @@ let swap_variables v1 v2 =
   Unique.iter (fun n -> swap_node n v1 v2) all1
 
 
-let max_level = ref 0
-
-let new_var () =
-  incr max_level;
-  { level = !max_level; unique = Unique.create 32 }
 
 let and_cache_len = 10000
 let and_cache_res = Weak.create and_cache_len
@@ -120,3 +130,5 @@ let _or nod1 nod2 = inv (_and (inv nod1) (inv nod2))
 let _diff nod1 nod2 = _and nod1 (inv nod2)
 		
 let var v = make_node v One Zero
+
+
