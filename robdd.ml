@@ -182,21 +182,27 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
 		    else if n2 == Zero then simpl p1 p2
 		    else 
 		      make v1 (simpl p1 p2) (simpl n1 n2)
-		  else if c < 0 then make v1 (simpl p1 nod2) (simpl n1 nod2)
-		  else 
-		    let u = p2 ||| n2 in
-		    make v2 (simpl p1 u) (simpl n1 u)
+		  else
+		    if c < 0 then
+		      make v1 (simpl p1 nod2) (simpl n1 nod2)
+		    else
+		      let u = p2 ||| n2 in
+		      simpl nod1 u
 		in
 		simpl_cache_arg1.(h) <- id1; simpl_cache_arg2.(h) <- id2;
 		Weak.set simpl_cache_res h (Some res);
+(*		Format.fprintf Format.std_formatter "Simplif %a ; %a ==> %a@."
+		  dmp nod1 dmp nod2 dmp res; *)
 		res
 
-(*
   let simpl nod1 nod2 =
-    Format.fprintf Format.std_formatter "Simplif %a ; %a ==> %a@."
-      dmp nod1 dmp nod2 dmp (simpl nod1 nod2);
-    simpl nod1 nod2
-*)
+    let res = simpl nod1 nod2 in
+    let check1 = (nod1 ||| (~~~ nod2)) in
+    let check2 = (res ||| (~~~ nod2)) in
+    assert (check1 == check2);
+(*      Format.fprintf Format.std_formatter "Simplif %a ; %a ==> %a@."
+	dmp nod1 dmp nod2 dmp (simpl nod1 nod2); *)
+    res
 
   let one = One
   let zero = Zero
@@ -205,25 +211,71 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
   let hash n = uid n
   let compare n1 n2 = Pervasives.compare (uid n1) (uid n2)
 
-  let dnf n =
+  let dnf pos0 neg0 n =
     let rec aux accu pos neg = function
       | Zero -> accu
       | One -> (pos,neg)::accu
-      | Var (x,p,Zero,_,_) -> aux accu (x::pos) neg p
+(*      | Var (x,p,Zero,_,_) -> aux accu (x::pos) neg p
       | Var (x,Zero,n,_,_) -> aux accu pos (x::neg) n
       | Var (x,One,n,_,_) -> aux ((x::pos,neg)::accu) pos neg n
-      | Var (x,p,One,_,_) -> aux ((pos,x::neg)::accu) pos neg p
+      | Var (x,p,One,_,_) -> aux ((pos,x::neg)::accu) pos neg p *)
       | Var (x,p,n,_,_) ->
+	  if List.mem x pos0 then aux accu pos neg p
+	  else if List.mem x neg0 then aux accu pos neg n
+	  else
 (*	  Format.fprintf Format.std_formatter
-	    "p=%a n=%a  p---n=%a n---p=%a@." dmp p dmp n dmp (p ---n) dmp (n---p);*)
-	  if (p --- n == Zero) 
+	    "p=%a n=%a  p---n=%a n---p=%a@." dmp p dmp n dmp (p ---n) dmp (n---p); *)
+	  if (p --- n == Zero)
 	  then aux (aux accu pos neg p) pos (x::neg) (simpl n (~~~ p))
 	  else if (n --- p == Zero)
 	  then aux (aux accu pos neg n) (x::pos) neg (simpl p (~~~ n))
 	  else aux (aux accu (x::pos) neg p) pos (x::neg) n
     in
-    aux [] [] [] n
+    aux [] pos0 neg0 n
 
+
+  module VarSet = Set.Make(X)
+
+  let all_vars n = 
+    let h = Hashtbl.create 20 in
+    let all = ref VarSet.empty in
+    let rec aux = function
+      | Zero | One -> ()
+      | Var (v,p,n,_,uid) ->
+	  if Hashtbl.mem h uid then ()
+	  else (Hashtbl.add h uid ();
+		all := VarSet.add v !all;
+		aux p; aux n)
+    in
+    aux n;
+    !all
+
+  let factorize n =
+    (* Incorrect *)
+    let all = all_vars n in
+    let h = Hashtbl.create 20 in
+    let rec aux = function
+      | Zero | One -> all,all
+      | Var (v,p,n,_,uid) ->
+	  try Hashtbl.find h uid
+	  with Not_found ->
+	    let pos_p,neg_p = aux p
+	    and pos_n,neg_n = aux n in
+	    let pos = VarSet.inter pos_p pos_n
+	    and neg = VarSet.inter neg_p neg_n in
+	    let pos = if n != Zero then VarSet.remove v pos else pos
+	    and neg = if p != Zero then VarSet.remove v neg else neg in
+	    let r = (pos,neg) in
+	    Hashtbl.add h uid r;
+	    r
+    in
+    aux n
+
+  let dnf n =
+    let pos,neg = factorize n in
+    Printf.eprintf "%i,%i\n" (List.length (VarSet.elements pos))
+      (List.length (VarSet.elements neg));
+    dnf (VarSet.elements pos) (VarSet.elements neg) n
 
 end
 
@@ -259,6 +311,8 @@ open M
 let () =
   let a = !!! 4 and b = !!! 2 and c = !!! 3 and d = !!! 6
 					    and e = !!! 5 and f = !!! 1 in
-  let x = (a &&& b) ||| (c &&& d) ||| (e &&& f) in
+(*  let a = !!! 1 and b = !!! 2 and c = !!! 3 and d = !!! 4
+					    and e = !!! 5 and f = !!! 6 in *)
+  let x = ((a &&& b) ||| (c &&& d) ||| (e &&& f)) &&& (!!!8 &&& !!!9) in
   Format.fprintf Format.std_formatter "%a@.%a@." dmp x dmp_dnf (dnf x)
 
