@@ -7,33 +7,48 @@ end
 
 module type S = sig
   type var
+    (** Type of atoms. *)
 
-  type t = private
-	      | Zero
-	      | One
-	      | Var of var * t * t * pr * int
-
-  and pr
-
-  val equal: t -> t -> bool
-  val hash: t -> int
-  val compare: t -> t -> int
+  include HashedOrdered (* Formulas. *)
 
   val dump: 
     (Format.formatter -> var -> unit) -> Format.formatter -> t -> unit
 
-  val make: var -> t -> t -> t
+  val uid: t -> int
+    (** Returns an integer which uniquely identifies the formula. *)
 
   val one: t
+    (** The true formula. *)
+
   val zero: t
+    (** The false formula. *)
+
   val (!!!): var -> t
+    (** Builds a formula from an atom. *)
+
   val (~~~): t -> t
+    (** Logical negation. *)
+
   val (&&&): t -> t -> t
+    (** Logical conjunction. *)
+
   val (|||): t -> t -> t
+    (** Logical disjunction. *)
+
   val (---): t -> t -> t
+    (** Logical difference. *)
 
   val simpl: t -> t -> t
+    (** [simpl t1 t2] returns a formula [t] which is equivalent to [t1]
+	for valuations such that [t2] hold. *)
+
   val dnf: t -> (var list * var list) list
+    (** [dnf t] puts the formula [t] is disjunctive normal form
+	(disjunction of conjunctions of atoms and negation of atoms. *)
+
+  val dnf_enum :
+    ('a -> 'b -> 'b) ->
+    pos:(var -> 'a -> 'a) -> neg:(var -> 'a -> 'a) -> 'b -> 'a -> t -> 'b
 end
 
 module Make(X : HashedOrdered) : S with type var = X.t = struct
@@ -44,8 +59,6 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
     | Zero 
     | One 
     | Var of X.t * t * t * t * int
-
-  type pr = t
 
   type t_var = 
       { mutable v: X.t; 
@@ -195,6 +208,7 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
 		  dmp nod1 dmp nod2 dmp res; *)
 		res
 
+(*
   let simpl nod1 nod2 =
     let res = simpl nod1 nod2 in
     let check1 = (nod1 ||| (~~~ nod2)) in
@@ -203,6 +217,7 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
 (*      Format.fprintf Format.std_formatter "Simplif %a ; %a ==> %a@."
 	dmp nod1 dmp nod2 dmp (simpl nod1 nod2); *)
     res
+*)
 
   let one = One
   let zero = Zero
@@ -215,10 +230,10 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
     let rec aux accu pos neg = function
       | Zero -> accu
       | One -> (pos,neg)::accu
-(*      | Var (x,p,Zero,_,_) -> aux accu (x::pos) neg p
+      | Var (x,p,Zero,_,_) -> aux accu (x::pos) neg p
       | Var (x,Zero,n,_,_) -> aux accu pos (x::neg) n
       | Var (x,One,n,_,_) -> aux ((x::pos,neg)::accu) pos neg n
-      | Var (x,p,One,_,_) -> aux ((pos,x::neg)::accu) pos neg p *)
+      | Var (x,p,One,_,_) -> aux ((pos,x::neg)::accu) pos neg p 
       | Var (x,p,n,_,_) ->
 	  if List.mem x pos0 then aux accu pos neg p
 	  else if List.mem x neg0 then aux accu pos neg n
@@ -234,8 +249,26 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
     aux [] pos0 neg0 n
 
 
+  let dnf_enum cons ~pos ~neg =
+    let rec aux accu cur = function
+      | Zero -> accu
+      | One -> cons cur accu
+      | Var (x,p,Zero,_,_) -> aux accu (pos x cur) p
+      | Var (x,Zero,n,_,_) -> aux accu (neg x cur) n
+      | Var (x,One,n,_,_) -> aux (cons (pos x cur) accu) cur n
+      | Var (x,p,One,_,_) -> aux (cons (neg x cur) accu) cur p 
+      | Var (x,p,n,_,_) ->
+	  if (p --- n == Zero)
+	  then aux (aux accu cur p) (neg x cur) (simpl n (~~~ p))
+	  else if (n --- p == Zero)
+	  then aux (aux accu cur n) (pos x cur) (simpl p (~~~ n))
+	  else aux (aux accu (pos x cur) p) (neg x cur) n
+    in
+    aux
+
   module VarSet = Set.Make(X)
 
+(*
   let all_vars n = 
     let h = Hashtbl.create 20 in
     let all = ref VarSet.empty in
@@ -249,36 +282,40 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
     in
     aux n;
     !all
+*)
 
   let factorize n =
-    (* Incorrect *)
-    let all = all_vars n in
     let h = Hashtbl.create 20 in
     let rec aux = function
-      | Zero | One -> all,all
+      | Zero | One -> VarSet.empty,VarSet.empty
       | Var (v,p,n,_,uid) ->
 	  try Hashtbl.find h uid
 	  with Not_found ->
-	    let pos_p,neg_p = aux p
-	    and pos_n,neg_n = aux n in
-	    let pos = VarSet.inter pos_p pos_n
-	    and neg = VarSet.inter neg_p neg_n in
-	    let pos = if n != Zero then VarSet.remove v pos else pos
-	    and neg = if p != Zero then VarSet.remove v neg else neg in
-	    let r = (pos,neg) in
+	    let r = 
+	      if n == Zero then
+		let pos_p,neg_p = aux p in
+		VarSet.add v pos_p, neg_p
+	      else if p == Zero then
+		let pos_n,neg_n = aux n in
+		pos_n, VarSet.add v neg_n
+	      else
+		let pos_p,neg_p = aux p
+		and pos_n,neg_n = aux n in
+		VarSet.inter pos_p pos_n, VarSet.inter neg_p neg_n in
 	    Hashtbl.add h uid r;
 	    r
     in
     aux n
 
   let dnf n =
-    let pos,neg = factorize n in
-    Printf.eprintf "%i,%i\n" (List.length (VarSet.elements pos))
-      (List.length (VarSet.elements neg));
+    let pos,neg = VarSet.empty, VarSet.empty (* factorize n *) in
+(*    Printf.eprintf "%i,%i\n" (List.length (VarSet.elements pos))
+      (List.length (VarSet.elements neg)); *)
     dnf (VarSet.elements pos) (VarSet.elements neg) n
 
 end
 
+(*
 module M = Make(
   struct 
     type t = int
@@ -310,9 +347,10 @@ open M
 
 let () =
   let a = !!! 4 and b = !!! 2 and c = !!! 3 and d = !!! 6
-					    and e = !!! 5 and f = !!! 1 in
+					    and e = !!! 10 and f = !!! 11 in 
 (*  let a = !!! 1 and b = !!! 2 and c = !!! 3 and d = !!! 4
-					    and e = !!! 5 and f = !!! 6 in *)
-  let x = ((a &&& b) ||| (c &&& d) ||| (e &&& f)) &&& (!!!8 &&& !!!9) in
-  Format.fprintf Format.std_formatter "%a@.%a@." dmp x dmp_dnf (dnf x)
-
+					    and e = !!! 5 and f = !!! 6 in  *)
+  let x = ((a &&& b) ||| (c &&& d) ||| (e &&& f)) ||| (!!!8 &&& !!!13 &&& !!!0) in
+  Format.fprintf Format.std_formatter "X=%a@.DNF=%a@." 
+    dmp x dmp_dnf (dnf x)
+*)
