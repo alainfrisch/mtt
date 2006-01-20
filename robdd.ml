@@ -49,6 +49,9 @@ module type S = sig
   val dnf_enum :
     ('a -> 'b -> 'b) ->
     pos:(var -> 'a -> 'a) -> neg:(var -> 'a -> 'a) -> 'b -> 'a -> t -> 'b
+
+  val is_zero: t -> bool
+  val is_one: t -> bool
 end
 
 module Make(X : HashedOrdered) : S with type var = X.t = struct
@@ -312,6 +315,9 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
 (*    Printf.eprintf "%i,%i\n" (List.length (VarSet.elements pos))
       (List.length (VarSet.elements neg)); *)
     dnf (VarSet.elements pos) (VarSet.elements neg) n
+
+  let is_zero = function Zero -> true | _ -> false
+  let is_one = function One -> true | _ -> false
 
 end
 

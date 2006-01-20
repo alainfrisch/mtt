@@ -1,33 +1,51 @@
 type atom = int
 
 module AtomSet = struct
-  type t = Finite of Ptset.t | Cofinite of Ptset.t
+  type t = Finite of Pt.Set.t | Cofinite of Pt.Set.t
 
-  let singleton s = Finite (Ptset.singleton s)
+  let is_in i = function
+    | Finite s -> Pt.Set.mem i s
+    | Cofinite s -> not (Pt.Set.mem i s)
+
+  let singleton s = Finite (Pt.Set.singleton s)
+
+  let neg  = function
+    | Finite s -> Cofinite s
+    | Cofinite s -> Finite s
 
   let is_empty = function
-    | Finite s -> Ptset.is_empty s
+    | Finite s -> Pt.Set.is_empty s
     | Cofinite _ -> false
 
+  let is_any = function
+    | Cofinite s -> Pt.Set.is_empty s
+    | Finite _ -> false
+
   let inter s1 s2 = match s1,s2 with
-    | Finite s1, Finite s2 -> Finite (Ptset.inter s1 s2)
-    | Cofinite s1, Cofinite s2 -> Cofinite (Ptset.union s1 s2)
+    | Finite s1, Finite s2 -> Finite (Pt.Set.inter s1 s2)
+    | Cofinite s1, Cofinite s2 -> Cofinite (Pt.Set.union s1 s2)
     | Finite s1, Cofinite s2
-    | Cofinite s2, Finite s1 -> Finite (Ptset.diff s1 s2)
+    | Cofinite s2, Finite s1 -> Finite (Pt.Set.diff s1 s2)
 
   let diff s1 s2 = match s1,s2 with
-    | Finite s1, Cofinite s2 -> Finite (Ptset.inter s1 s2)
-    | Cofinite s1, Finite s2 -> Cofinite (Ptset.union s1 s2)
+    | Finite s1, Cofinite s2 -> Finite (Pt.Set.inter s1 s2)
+    | Cofinite s1, Finite s2 -> Cofinite (Pt.Set.union s1 s2)
     | Finite s1, Finite s2
-    | Cofinite s2, Cofinite s1 -> Finite (Ptset.diff s1 s2)
+    | Cofinite s2, Cofinite s1 -> Finite (Pt.Set.diff s1 s2)
 
-  let any = Cofinite Ptset.empty
-  let empty = Finite Ptset.empty
+  let union s1 s2 = match s1,s2 with
+    | Finite s1, Finite s2 -> Finite (Pt.Set.union s1 s2)
+    | Cofinite s1, Cofinite s2 -> Cofinite (Pt.Set.inter s1 s2)
+    | Finite s1, Cofinite s2
+    | Cofinite s2, Finite s1 -> Cofinite (Pt.Set.diff s2 s1)
+
+  let any = Cofinite Pt.Set.empty
+  let empty = Finite Pt.Set.empty
 
   let equal s1 s2 = s1 = s2
 (* match s1,s2 with
     | Finite s1, Finite s2
-    | Cofinite s1, Cofinite s2 -> Ptset.equal s1 s2
+    | Cofinite s1, Cofinite s2 -> Pt.Set.equal s1 s2
     | _ -> false *)
 
   let hash s = Hashtbl.hash s
@@ -71,23 +89,31 @@ struct
     | Snd _, Fst _ -> (-1)
 end
 
+include Node
+
 let cur_id = ref 0
 
-let cons atoms tr =
-  incr cur_id;
-  { uid = !cur_id;
-    atoms = atoms;
-    trans = tr }
+let typ atoms tr = incr cur_id; { uid = !cur_id; atoms = atoms; trans = tr }
 
-let any = cons AtomSet.any Trans.one
+let any = typ AtomSet.any Trans.one
+let empty = typ AtomSet.empty Trans.zero
+let any_pair = typ AtomSet.empty Trans.one
+let any_atom = typ AtomSet.any Trans.zero
 
-let mk () = cons any.atoms any.trans
+type delayed = t
+
+let mk () = typ AtomSet.any Trans.one
 let def n t = n.atoms <- t.atoms; n.trans <- t.trans
+let get_delayed t = t
 
 let inter t1 t2 = 
-  cons (AtomSet.inter t1.atoms t2.atoms) (Trans.(&&&) t1.trans t2.trans)
+  typ (AtomSet.inter t1.atoms t2.atoms) (Trans.(&&&) t1.trans t2.trans)
 let diff t1 t2 = 
-  cons (AtomSet.diff t1.atoms t2.atoms) (Trans.(---) t1.trans t2.trans)
+  typ (AtomSet.diff t1.atoms t2.atoms) (Trans.(---) t1.trans t2.trans)
+let union t1 t2 = 
+  typ (AtomSet.union t1.atoms t2.atoms) (Trans.(|||) t1.trans t2.trans)
+let neg t =
+  typ (AtomSet.neg t.atoms) (Trans.(~~~) t.trans)
 
 let dnf_trans =
   Trans.dnf_enum
@@ -135,15 +161,25 @@ let is_empty t =
   empty_stack := [];
   r
 
+let subset t1 t2 = is_empty (diff t1 t2)
+let disjoint t1 t2 = is_empty (inter t1 t2)
 
-open Trans
+let fst t = typ AtomSet.empty (Trans.(!!!) (Fst t))
+let snd t = typ AtomSet.empty (Trans.(!!!) (Snd t))
+let atom i = typ (AtomSet.singleton i) Trans.zero
 
-let () =
-  let n1 = mk () in
-  let n2 = cons AtomSet.empty !!! (Snd n1) in
-  def n1 (cons 
-	    AtomSet.empty
-	    !!! (Fst n2)
-	 );
-  let b = is_empty n1 in
-  Printf.printf "is_empty=%b\n" b
+let dnf_pair t = dnf_trans t.trans
+
+let dnf_neg_pair t = dnf_trans (Trans.(~~~) t.trans)
+
+type v = Atom of atom | Pair of v * v
+
+let rec is_in v t = match v with
+  | Atom i -> AtomSet.is_in i t.atoms
+  | Pair (v1,v2) -> 
+      List.exists 
+	(fun (t1,t2) -> is_in v1 t1 && is_in v2 t2) 
+	(dnf_pair t)  (* todo: don't build the dnf here *)
+
+let is_trivially_empty t = Trans.is_zero t.trans && AtomSet.is_empty t.atoms
+let is_trivially_any t = Trans.is_one t.trans && AtomSet.is_any t.atoms
