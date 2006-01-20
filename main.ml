@@ -8,7 +8,7 @@ let parse () =
 let infer (e,t) = 
   let s = Mtt.infer Mtt.Env.empty e t () in
   Printf.eprintf "Inferred\n"; flush stderr;
-  Format.fprintf Format.std_formatter "inferred input:%a@." Ta.print s
+  Format.fprintf Format.std_formatter "inferred input:%a@." Ta.print ((*Ta.normalize*) s)
 
 let main () =
   let prog = Syntax.parse (parse ()) in
