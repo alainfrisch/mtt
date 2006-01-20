@@ -7,7 +7,11 @@ expr FlattenAux =
 expr Flatten =
   let accu = 0 in FlattenAux
 
-infer Flatten in (1,(2,(3,0)))
+/* infer Flatten in (1,(2,(3,0))) */
+
+type Seq = (Atom,Seq) | 0
+
+check Flatten : Any -> Seq
 
 /*
 expr SetLeftMost = if Copy in Atom then x else (<SetLeftMost, >Copy)
