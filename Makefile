@@ -1,16 +1,16 @@
 CAMLC = ocamlc
 CAMLOPT = ocamlopt
 
-all: mtt.opt
+all: ta.opt
 
 OBJECTS = \
   robdd.cmo pt.cmo ta.cmo mtt.cmo syntax.cmo parser.cmo lexer.cmo \
   main.cmo
 
-mtt: $(OBJECTS)
+ta: $(OBJECTS)
 	$(CAMLC) -o ta $(OBJECTS)
 
-mtt.opt: $(OBJECTS:.cmo=.cmx)
+ta.opt: $(OBJECTS:.cmo=.cmx)
 	$(CAMLOPT) -o ta.opt $(OBJECTS:.cmo=.cmx)
 
 include .depend
@@ -19,8 +19,7 @@ depend:
 	ocamldep *.ml *.mli > .depend
 
 clean:
-	rm -f *.cm* *.o *~ lexer.ml parser.ml parser.mli 
-	rm -f mtt mtt.opt
+	rm -f *.cm* *.o *~
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
