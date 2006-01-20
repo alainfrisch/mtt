@@ -109,4 +109,4 @@ let parse prog =
        | Phrase.Type (x,t) -> Hashtbl.add types x t
        | Phrase.Expr (x,e) -> Hashtbl.add exprs x e
        | Phrase.Infer (e,t) -> cmds := (e,t) :: !cmds) prog;
-  List.map (fun (e,t) -> (parse_expr [] e, parse_type [] t)) !cmds
+  List.rev_map (fun (e,t) -> (parse_expr [] e, parse_type [] t)) !cmds

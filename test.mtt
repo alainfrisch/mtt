@@ -7,4 +7,10 @@ expr FlattenAux =
 expr Flatten =
   let accu = 0 in FlattenAux
 
-infer Flatten in (Atom,(Atom,0))
+infer Flatten in (1,(2,(3,0)))
+
+/*
+expr SetLeftMost = if Copy in Atom then x else (<SetLeftMost, >Copy)
+
+infer (let x = Copy in SetLeftMost) in ((5,Atom),Atom)
+*/

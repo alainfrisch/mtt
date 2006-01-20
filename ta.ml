@@ -147,13 +147,17 @@ module TransHash = Hashtbl.Make(Trans)
 let empty_memo = TransHash.create 4096
 let empty_stack = ref []
 
+(* TODO: don't remove [false] *)
 let rec unstack tr = function
   | hd::tl when hd == tr -> tl
-  | hd::tl -> TransHash.remove empty_memo hd; unstack tr tl
+  | hd::tl ->
+      if TransHash.find empty_memo hd then TransHash.remove empty_memo hd; 
+      unstack tr tl
   | [] -> assert false
 
 let rec is_empty t =
   (AtomSet.is_empty t.atoms) && (
+    Printf.eprintf "."; flush stderr;
     let tr = t.trans in
     try TransHash.find empty_memo tr
     with Not_found ->
@@ -216,18 +220,19 @@ let print ppf t =
 	  if List.memq t !p then ()
 	  else (
 	    p := t :: !p;
-	    if is_empty t then Format.fprintf ppf "%i:=Empty@\n" t.uid
-	    else if is_equal t any then Format.fprintf ppf "%i:=Any@\n" t.uid
+	    if is_empty t then Format.fprintf ppf "%i:=Empty@." t.uid
+(*	    else if is_equal t any then Format.fprintf ppf "%i:=Any@." t.uid
 	    else if is_equal t any_atom then 
-	      Format.fprintf ppf "%i:=AnyAtom@\n" t.uid
+	      Format.fprintf ppf "%i:=AnyAtom@." t.uid
 	    else if is_equal t any_pair then 
-	      Format.fprintf ppf "%i:=AnyPair@\n" t.uid
-	    else 
-	      Format.fprintf ppf "%i:={atoms:%a;pairs:%a==%a}@\n" t.uid
+	      Format.fprintf ppf "%i:=AnyPair@." t.uid *)
+	    else  
+	    Format.fprintf ppf "%i:={atoms:%a;pairs:%a}@." t.uid
 		AtomSet.print t.atoms
-		(Trans.dump_dnf (dump_tr l)) t.trans
-		(Trans.dump (dump_tr l)) t.trans
+(*		(Trans.dump_dnf (dump_tr l)) t.trans*)
+		(Trans.dump (dump_tr l)) t.trans; 
 	  );
+	  flush stdout;
 	  loop ()
   in
   loop ()

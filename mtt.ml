@@ -100,11 +100,10 @@ and infer_sub env uid dir e v t =
     let r = if Ta.is_in v t then Ta.union r Ta.any_atom else r in
     Memo.add infer_memo i (Type r);
     infer_stack := i :: !infer_stack;
-    Ta.def d (infer env e t ());
     (try Ta.def d (infer env e t ())
      with (Refine _) as exn ->
        Memo.replace infer_memo i (Exn exn);
-       infer_stack := i :: (unstack i !infer_stack);
+       infer_stack := unstack i !infer_stack;
        raise exn);
      r
 
