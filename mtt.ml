@@ -68,8 +68,8 @@ let rec infer env e t () = match e with
 	    else
 	      let r = 
 		union 
-		  (infer env e1 (Ta.neg t1)) 
-		  (infer env e2 (Ta.neg t2)) () in
+		  (infer env e1 t1) 
+		  (infer env e2 t2) () in
 	      let accu = Ta.inter accu r in
 	      if Ta.is_trivially_empty accu then raise Exit else accu)
 	 Ta.any
@@ -96,7 +96,7 @@ and infer_sub env uid dir e v t =
      r
 
 and infer_let env x e1 e2 dom t () =
-  try union (infer env e1 (Ta.neg t)) (infer (Env.add x dom env) e2 t) ()
+  try union (infer env e1 (Ta.neg dom)) (infer (Env.add x dom env) e2 t) ()
   with Refine (y,tx) when x == y ->
     inter 
       (infer_let env x e1 e2 (Ta.inter dom tx) t)

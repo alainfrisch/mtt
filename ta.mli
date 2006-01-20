@@ -41,3 +41,6 @@ val is_in: v -> t -> bool
 
 val dnf_pair: t -> (t * t) list
 val dnf_neg_pair: t -> (t * t) list
+
+
+val print: Format.formatter -> t -> unit

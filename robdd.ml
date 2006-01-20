@@ -13,6 +13,8 @@ module type S = sig
 
   val dump: 
     (Format.formatter -> var -> unit) -> Format.formatter -> t -> unit
+  val dump_dnf: 
+    (Format.formatter -> var -> unit) -> Format.formatter -> t -> unit
 
   val uid: t -> int
     (** Returns an integer which uniquely identifies the formula. *)
@@ -240,14 +242,14 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
       | Var (x,p,n,_,_) ->
 	  if List.mem x pos0 then aux accu pos neg p
 	  else if List.mem x neg0 then aux accu pos neg n
-	  else
+	  else (
 (*	  Format.fprintf Format.std_formatter
-	    "p=%a n=%a  p---n=%a n---p=%a@." dmp p dmp n dmp (p ---n) dmp (n---p); *)
+	    "p=%a n=%a  p---n=%a n---p=%a@." dmp p dmp n dmp (p ---n) dmp (n---p);  *)
 	  if (p --- n == Zero)
 	  then aux (aux accu pos neg p) pos (x::neg) (simpl n (~~~ p))
 	  else if (n --- p == Zero)
-	  then aux (aux accu pos neg n) (x::pos) neg (simpl p (~~~ n))
-	  else aux (aux accu (x::pos) neg p) pos (x::neg) n
+	  then (aux (aux accu pos neg n) (x::pos) neg (simpl p (~~~ n)))
+	  else aux (aux accu (x::pos) neg p) pos (x::neg) n )
     in
     aux [] pos0 neg0 n
 
@@ -319,7 +321,22 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
   let is_zero = function Zero -> true | _ -> false
   let is_one = function One -> true | _ -> false
 
+  let rec print_list f sep ppf = function
+    | [] -> ()
+    | [hd] -> f ppf hd
+    | hd::tl -> f ppf hd; Format.fprintf ppf "%s" sep; print_list f sep ppf tl
+	
+  let dump_dnf f ppf t =
+    print_list
+      (fun ppf (pos,neg) ->
+	 Format.fprintf ppf "(%a;%a)"
+	   (print_list f ",") pos
+	   (print_list f ",") neg
+      )
+      "|"
+      ppf (dnf t)
 end
+
 
 (*
 module M = Make(
@@ -352,11 +369,9 @@ let dmp_dnf ppf l =
 open M
 
 let () =
-  let a = !!! 4 and b = !!! 2 and c = !!! 3 and d = !!! 6
-					    and e = !!! 10 and f = !!! 11 in 
-(*  let a = !!! 1 and b = !!! 2 and c = !!! 3 and d = !!! 4
-					    and e = !!! 5 and f = !!! 6 in  *)
-  let x = ((a &&& b) ||| (c &&& d) ||| (e &&& f)) ||| (!!!8 &&& !!!13 &&& !!!0) in
+  let a = !!! 4 and b = !!! 1 and c = !!! 3 and d = !!! 2 in
+  let x = (a &&& b) ||| (c &&& d) in
   Format.fprintf Format.std_formatter "X=%a@.DNF=%a@." 
     dmp x dmp_dnf (dnf x)
-*)
+
+  *)

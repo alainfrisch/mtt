@@ -3,6 +3,14 @@ type atom = int
 module AtomSet = struct
   type t = Finite of Pt.Set.t | Cofinite of Pt.Set.t
 
+  let print ppf = function
+    | Finite s ->
+ 	Format.fprintf ppf "%s"
+	  (String.concat "|" (List.map string_of_int (Pt.Set.elements s)))
+    | Cofinite s ->
+ 	Format.fprintf ppf "~(%s)"
+	  (String.concat "|" (List.map string_of_int (Pt.Set.elements s)))
+
   let is_in i = function
     | Finite s -> Pt.Set.mem i s
     | Cofinite s -> not (Pt.Set.mem i s)
@@ -83,10 +91,16 @@ struct
     | Fst n -> 2 * n.uid
     | Snd n -> 2 * n.uid + 1
   let compare x y = match x,y with
-    | Fst n1, Fst n2 -> n1.uid - n2.uid
-    | Snd n1, Snd n2 -> n1.uid - n2.uid
+    | Fst n1, Fst n2 -> n2.uid - n1.uid
+    | Snd n1, Snd n2 -> n2.uid - n1.uid
     | Fst _, Snd _ -> (-1)
-    | Snd _, Fst _ -> (-1)
+    | Snd _, Fst _ -> 1
+(*  let compare x y = match x,y with
+    | (Fst n1 | Snd n1), (Fst n2 | Snd n2) ->
+	if n1 == n2 then match x,y with
+	  | Fst _, Fst _ | Snd _, Snd _ -> 0
+	  | Fst _, Snd _ -> 1 | _ -> -1
+	else n2.uid - n1.uid *)
 end
 
 include Node
@@ -183,3 +197,28 @@ let rec is_in v t = match v with
 
 let is_trivially_empty t = Trans.is_zero t.trans && AtomSet.is_empty t.atoms
 let is_trivially_any t = Trans.is_one t.trans && AtomSet.is_any t.atoms
+
+let dump_tr l ppf = function
+  | Fst x -> l := x::!l; Format.fprintf ppf "L%i" x.uid
+  | Snd x -> l := x::!l; Format.fprintf ppf "R%i" x.uid
+
+let print ppf t =
+  let l = ref [t] in
+  let p = ref [] in
+  let rec loop () =
+    match !l with
+      | [] -> ()
+      | t::rest ->
+	  l := rest;
+	  if List.memq t !p then ()
+	  else (
+	    p := t :: !p;
+	    Format.fprintf ppf "%i:={atoms:%a;pairs:%a==%a}@\n" t.uid
+	      AtomSet.print t.atoms
+	      (Trans.dump_dnf (dump_tr l)) t.trans
+	      (Trans.dump (dump_tr l)) t.trans
+	  );
+	  loop ()
+  in
+  loop ()
+
