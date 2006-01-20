@@ -50,11 +50,12 @@ module AtomSet = struct
   let any = Cofinite Pt.Set.empty
   let empty = Finite Pt.Set.empty
 
-  let equal s1 s2 = s1 = s2
-(* match s1,s2 with
-    | Finite s1, Finite s2
-    | Cofinite s1, Cofinite s2 -> Pt.Set.equal s1 s2
-    | _ -> false *)
+  let equal s1 s2 =  s1 = s2
+(*    match s1,s2 with
+      | Finite s1, Finite s2
+      | Cofinite s1, Cofinite s2 -> Pt.Set.elements s1 = Pt.Set.elements s2
+    (* Pt.Set.equal s1 s2 *)
+      | _ -> false *)
 
   let hash s = Hashtbl.hash s
 
@@ -178,6 +179,8 @@ let is_empty t =
 let subset t1 t2 = is_empty (diff t1 t2)
 let disjoint t1 t2 = is_empty (inter t1 t2)
 
+let is_equal t1 t2 = subset t1 t2 && subset t2 t1
+
 let fst t = typ AtomSet.empty (Trans.(!!!) (Fst t))
 let snd t = typ AtomSet.empty (Trans.(!!!) (Snd t))
 let atom i = typ (AtomSet.singleton i) Trans.zero
@@ -213,12 +216,64 @@ let print ppf t =
 	  if List.memq t !p then ()
 	  else (
 	    p := t :: !p;
-	    Format.fprintf ppf "%i:={atoms:%a;pairs:%a==%a}@\n" t.uid
-	      AtomSet.print t.atoms
-	      (Trans.dump_dnf (dump_tr l)) t.trans
-	      (Trans.dump (dump_tr l)) t.trans
+	    if is_empty t then Format.fprintf ppf "%i:=Empty@\n" t.uid
+	    else if is_equal t any then Format.fprintf ppf "%i:=Any@\n" t.uid
+	    else if is_equal t any_atom then 
+	      Format.fprintf ppf "%i:=AnyAtom@\n" t.uid
+	    else if is_equal t any_pair then 
+	      Format.fprintf ppf "%i:=AnyPair@\n" t.uid
+	    else 
+	      Format.fprintf ppf "%i:={atoms:%a;pairs:%a==%a}@\n" t.uid
+		AtomSet.print t.atoms
+		(Trans.dump_dnf (dump_tr l)) t.trans
+		(Trans.dump (dump_tr l)) t.trans
 	  );
 	  loop ()
   in
   loop ()
+
+
+let normalize_dnf l =
+  let rec add accu t1 t2 = function
+    | [] -> (t1,t2) :: accu
+    | ((s1,s2) as s)::rest ->
+	if disjoint s1 t1 then add (s::accu) t1 t2 rest
+	else
+	  let t1' = inter t1 s1 in
+	  let accu = (t1',union t2 s2) :: accu in
+	  let s1' = diff s1 t1 in
+	  let accu = if is_empty s1' then accu else (s1',s2) :: accu in
+	  let t1 = diff t1 s1 in
+	  if is_empty t1 then accu @ rest
+	  else add accu t1 t2 rest
+  in
+  List.fold_left (fun accu (t1,t2) -> add [] t1 t2 accu) [] l
+	    
+    
+
+module Memo = Hashtbl.Make(Node)
+
+let normalize_memo = Memo.create 4096
+
+let rec normalize t =
+  try Memo.find normalize_memo t
+  with Not_found ->
+(*    Format.fprintf Format.std_formatter "Normalize (uid=%i):%a@." 
+      (Trans.uid t.trans)
+      print t; *)
+    let t' = mk () in
+    Memo.add normalize_memo t t';
+    t'.atoms <- t.atoms;
+    t'.trans <- 
+      List.fold_left
+      (fun accu (t1,t2) ->
+	 if is_empty t1 || is_empty t2 then accu
+	 else Trans.(|||) accu 
+	   (Trans.(&&&) (Trans.(!!!) (Fst (normalize t1)))
+	      (Trans.(!!!) (Snd (normalize t2))))
+      )
+      Trans.zero
+      (normalize_dnf (dnf_trans t.trans));
+    Memo.add normalize_memo t' t';
+    t'
 

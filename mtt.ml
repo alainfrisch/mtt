@@ -44,7 +44,11 @@ let rec unstack tr = function
   | hd::tl -> Memo.remove infer_memo hd; unstack tr tl
   | [] -> assert false
 
-let rec infer env e t () = match e with
+let rec infer env e t () = 
+  if Ta.is_empty t then Ta.empty
+  else if Ta.is_empty (Ta.neg t) then Ta.any
+  else
+  match e with
   | EVal v -> if Ta.is_in v t then Ta.any else Ta.empty
   | ECopy -> t
   | EVar x ->
@@ -63,13 +67,12 @@ let rec infer env e t () = match e with
   | EPair (e1,e2) ->
       (try List.fold_left
 	 (fun accu (t1,t2) ->
-	    let t1 = Ta.neg t1 and t2 = Ta.neg t2 in
 	    if Ta.is_empty t1 || Ta.is_empty t2 then accu
 	    else
 	      let r = 
 		union 
-		  (infer env e1 t1) 
-		  (infer env e2 t2) () in
+		  (infer env e1 (Ta.neg t1)) 
+		  (infer env e2 (Ta.neg t2)) () in
 	      let accu = Ta.inter accu r in
 	      if Ta.is_trivially_empty accu then raise Exit else accu)
 	 Ta.any

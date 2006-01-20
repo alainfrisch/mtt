@@ -54,6 +54,8 @@ module type S = sig
 
   val is_zero: t -> bool
   val is_one: t -> bool
+
+  val uid: t -> int
 end
 
 module Make(X : HashedOrdered) : S with type var = X.t = struct
