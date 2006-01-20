@@ -42,6 +42,7 @@ let inter f1 f2 () =
 let rec unstack tr = function
   | hd::tl when hd == tr -> tl
   | hd::tl -> Memo.remove infer_memo hd; unstack tr tl
+      (* Do we need to remove Refine here? *)
   | [] -> assert false
 
 let rec infer env e t () = 

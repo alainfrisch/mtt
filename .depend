@@ -1,0 +1,21 @@
+lexer.cmo: parser.cmi 
+lexer.cmx: parser.cmx 
+main.cmo: ta.cmi syntax.cmo parser.cmi mtt.cmo lexer.cmo 
+main.cmx: ta.cmx syntax.cmx parser.cmx mtt.cmx lexer.cmx 
+mtt.cmo: ta.cmi pt.cmi 
+mtt.cmx: ta.cmx pt.cmx 
+parser.cmo: syntax.cmo parser.cmi 
+parser.cmx: syntax.cmx parser.cmi 
+pt.cmo: pt.cmi 
+pt.cmx: pt.cmi 
+ptmap.cmo: ptmap.cmi 
+ptmap.cmx: ptmap.cmi 
+ptset.cmo: ptset.cmi 
+ptset.cmx: ptset.cmi 
+syntax.cmo: ta.cmi mtt.cmo 
+syntax.cmx: ta.cmx mtt.cmx 
+ta.cmo: robdd.cmo pt.cmi ta.cmi 
+ta.cmx: robdd.cmx pt.cmx ta.cmi 
+tatest.cmo: ta.cmi mtt.cmo 
+tatest.cmx: ta.cmx mtt.cmx 
+parser.cmi: syntax.cmo 
