@@ -7,13 +7,21 @@ let parse () =
 
 let infer (e,t) = 
   let s = Mtt.infer Mtt.Env.empty e t () in
-  Printf.eprintf "Inferred\n"; flush stderr;
-  Format.fprintf Format.std_formatter "inferred input:%a@." Ta.print ((*Ta.normalize*) s)
+(*  Printf.eprintf "Inferred\n"; flush stderr; *)
+  let s = Ta.normalize s in
+(*  Printf.eprintf "Normalized\n"; flush stderr; *)
+(*  let s = Ta.normalize2 s in
+  Printf.eprintf "Normalized\n"; flush stderr; *)
+  Format.fprintf Format.std_formatter "inferred input:%a@." Ta.print s
+
+let check (e,t1,t2) = 
+  let s = Mtt.infer Mtt.Env.empty e t2 () in
+  let b = Ta.subset t1 s in
+  Format.fprintf Format.std_formatter "check:%b@." b
 
 let main () =
   let prog = Syntax.parse (parse ()) in
-  Printf.eprintf "Parsed\n"; flush stderr;
-  List.iter infer prog
+  List.iter (function `Check x -> check x | `Infer x -> infer x) prog
 
 let () = 
   try main ()

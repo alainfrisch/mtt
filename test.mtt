@@ -10,8 +10,10 @@ expr Flatten =
 /* infer Flatten in (1,(2,(3,0))) */
 
 type Seq = (Atom,Seq) | 0
+type SeqOne = (1,SeqOne) | 0
+type OnlyOne = (OnlyOne,OnlyOne) | 1 | 2
 
-check Flatten : Any -> Seq
+check Flatten : OnlyOne -> SeqOne
 
 /*
 expr SetLeftMost = if Copy in Atom then x else (<SetLeftMost, >Copy)

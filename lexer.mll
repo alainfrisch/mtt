@@ -22,6 +22,7 @@ rule token = parse
 	| "expr" -> EXPR
 	| "infer" -> INFER
 	| "rand" -> RAND
+	| "check" -> CHECK
 	| s -> LIDENT s
     }
   | uppercase identchar* { UIDENT (Lexing.lexeme lexbuf) }
@@ -34,6 +35,8 @@ rule token = parse
   | ">" { RIGHT }
   | "|" { PIPE }
   | "&" { AMPERSAND }
+  | ":" { COLON }
+  | "->" { ARROW }
   | "/*" { comment lexbuf }
   | eof { EOF }
 

@@ -26,6 +26,7 @@ module Phrase = struct
     | Type of string * Type.t
     | Expr of string * Expr.t
     | Infer of Expr.t * Type.t
+    | Check of Expr.t * Type.t * Type.t
 end
 
 let parse prog =
@@ -108,5 +109,12 @@ let parse prog =
     (function 
        | Phrase.Type (x,t) -> Hashtbl.add types x t
        | Phrase.Expr (x,e) -> Hashtbl.add exprs x e
-       | Phrase.Infer (e,t) -> cmds := (e,t) :: !cmds) prog;
-  List.rev_map (fun (e,t) -> (parse_expr [] e, parse_type [] t)) !cmds
+       | Phrase.Infer (e,t) -> cmds := `Infer (e,t) :: !cmds
+       | Phrase.Check (e,t1,t2) -> cmds := `Check (e,t1,t2) :: !cmds) prog;
+  List.rev_map 
+    (function
+       | `Infer (e,t) -> 
+	   `Infer (parse_expr [] e, parse_type [] t)
+       | `Check (e,t1,t2) -> 
+	   `Check (parse_expr [] e, parse_type [] t1, parse_type [] t2)
+    ) !cmds

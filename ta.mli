@@ -46,3 +46,4 @@ val dnf_neg_pair: t -> (t * t) list
 val print: Format.formatter -> t -> unit
 
 val normalize: t -> t
+val normalize2: t -> t

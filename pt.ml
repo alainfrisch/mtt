@@ -290,7 +290,16 @@ let rec max_elt = function
     order of insertion. As a consequence, two Patricia trees have the
     same elements if and only if they are structurally equal. *)
 
-let equal = (=)
+let equal t1 t2 =
+  let rec equal_aux t1 t2 = match t1, t2 with
+    | Empty, Empty -> true
+    | Leaf x1, Leaf x2 -> x1 = x2
+    | Branch (p1,m1,l1,r1), Branch (p2,m2,l2,r2) ->
+	p1 = p2 && m1 = m2 && equal_aux l1 l2 && equal_aux r1 r2
+    | _ -> false
+  in
+  equal_aux t1 t2
+
 
 let compare = compare
 
@@ -315,7 +324,10 @@ let rec intersect s1 s2 = match (s1,s2) with
       else
         false
 
-let hash = Hashtbl.hash
+let rec hash = function
+  | Empty -> 0
+  | Leaf k -> 17 * k
+  | Branch (p,m,l,r) ->  p + 17 * m + 257 * (hash l) + 65537 * (hash r)
 end
 
 module Map = struct

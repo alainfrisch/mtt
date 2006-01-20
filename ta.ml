@@ -50,14 +50,15 @@ module AtomSet = struct
   let any = Cofinite Pt.Set.empty
   let empty = Finite Pt.Set.empty
 
-  let equal s1 s2 =  s1 = s2
-(*    match s1,s2 with
+  let equal s1 s2 =
+    match s1,s2 with
       | Finite s1, Finite s2
-      | Cofinite s1, Cofinite s2 -> Pt.Set.elements s1 = Pt.Set.elements s2
-    (* Pt.Set.equal s1 s2 *)
-      | _ -> false *)
+      | Cofinite s1, Cofinite s2 -> Pt.Set.equal s1 s2 
+      | _ -> false 
 
-  let hash s = Hashtbl.hash s
+  let hash = function
+    | Finite s -> 1 + 2 * Pt.Set.hash s
+    | Cofinite s -> 2 * Pt.Set.hash s
 
   let compare s1 s2 = Pervasives.compare s1 s2
 end
@@ -92,16 +93,16 @@ struct
     | Fst n -> 2 * n.uid
     | Snd n -> 2 * n.uid + 1
   let compare x y = match x,y with
-    | Fst n1, Fst n2 -> n2.uid - n1.uid
-    | Snd n1, Snd n2 -> n2.uid - n1.uid
-    | Fst _, Snd _ -> (-1)
-    | Snd _, Fst _ -> 1
+    | Fst n1, Fst n2 -> n1.uid - n2.uid
+    | Snd n1, Snd n2 -> n1.uid - n2.uid
+    | Fst _, Snd _ -> 1
+    | Snd _, Fst _ -> -1 
 (*  let compare x y = match x,y with
     | (Fst n1 | Snd n1), (Fst n2 | Snd n2) ->
 	if n1 == n2 then match x,y with
 	  | Fst _, Fst _ | Snd _, Snd _ -> 0
 	  | Fst _, Snd _ -> 1 | _ -> -1
-	else n2.uid - n1.uid *)
+	else n2.uid - n1.uid  *)
 end
 
 include Node
@@ -147,7 +148,6 @@ module TransHash = Hashtbl.Make(Trans)
 let empty_memo = TransHash.create 4096
 let empty_stack = ref []
 
-(* TODO: don't remove [false] *)
 let rec unstack tr = function
   | hd::tl when hd == tr -> tl
   | hd::tl ->
@@ -157,7 +157,6 @@ let rec unstack tr = function
 
 let rec is_empty t =
   (AtomSet.is_empty t.atoms) && (
-    Printf.eprintf "."; flush stderr;
     let tr = t.trans in
     try TransHash.find empty_memo tr
     with Not_found ->
@@ -176,8 +175,10 @@ let rec is_empty t =
   )
 
 let is_empty t =
+(*  Printf.eprintf "+"; flush stderr; *)
   let r = is_empty t in
   empty_stack := [];
+(*  Printf.eprintf "-"; flush stderr;  *)
   r
 
 let subset t1 t2 = is_empty (diff t1 t2)
@@ -221,16 +222,16 @@ let print ppf t =
 	  else (
 	    p := t :: !p;
 	    if is_empty t then Format.fprintf ppf "%i:=Empty@." t.uid
-(*	    else if is_equal t any then Format.fprintf ppf "%i:=Any@." t.uid
+	    else if is_equal t any then Format.fprintf ppf "%i:=Any@." t.uid
 	    else if is_equal t any_atom then 
 	      Format.fprintf ppf "%i:=AnyAtom@." t.uid
 	    else if is_equal t any_pair then 
-	      Format.fprintf ppf "%i:=AnyPair@." t.uid *)
+	      Format.fprintf ppf "%i:=AnyPair@." t.uid
 	    else  
 	    Format.fprintf ppf "%i:={atoms:%a;pairs:%a}@." t.uid
 		AtomSet.print t.atoms
-(*		(Trans.dump_dnf (dump_tr l)) t.trans*)
-		(Trans.dump (dump_tr l)) t.trans; 
+		(Trans.dump_dnf (dump_tr l)) t.trans
+(*	      (Trans.dump (dump_tr l)) t.trans   *)
 	  );
 	  flush stdout;
 	  loop ()
@@ -278,7 +279,31 @@ let rec normalize t =
 	      (Trans.(!!!) (Snd (normalize t2))))
       )
       Trans.zero
+      ((*normalize_dnf*) (dnf_trans t.trans));
+(*    Memo.add normalize_memo t' t'; *)
+    t'
+
+let normalize2_memo = Memo.create 4096
+
+let rec normalize2 t =
+  try Memo.find normalize2_memo t
+  with Not_found ->
+(*    Format.fprintf Format.std_formatter "Normalize (uid=%i):%a@." 
+      (Trans.uid t.trans)
+      print t; *)
+    let t' = mk () in
+    Memo.add normalize2_memo t t';
+    t'.atoms <- t.atoms;
+    t'.trans <- 
+      List.fold_left
+      (fun accu (t1,t2) ->
+	 if is_empty t1 || is_empty t2 then accu
+	 else Trans.(|||) accu 
+	   (Trans.(&&&) (Trans.(!!!) (Fst (normalize2 t1)))
+	      (Trans.(!!!) (Snd (normalize2 t2))))
+      )
+      Trans.zero
       (normalize_dnf (dnf_trans t.trans));
-    Memo.add normalize_memo t' t';
+    Memo.add normalize2_memo t' t';
     t'
 
