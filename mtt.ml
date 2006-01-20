@@ -41,8 +41,10 @@ let inter f1 f2 () =
 
 let rec unstack tr = function
   | hd::tl when hd == tr -> tl
-  | hd::tl -> Memo.remove infer_memo hd; unstack tr tl
-      (* Do we need to remove Refine here? *)
+  | hd::tl -> 
+      (match Memo.find infer_memo hd with
+	 | Exn _ -> unstack tr tl
+	 | Type _ ->  Memo.remove infer_memo hd; unstack tr tl)
   | [] -> assert false
 
 let rec infer env e t () = 
@@ -58,7 +60,12 @@ let rec infer env e t () =
 	with Not_found -> Printf.eprintf "Unbound variable %i\n" x; exit 1 in
       if Ta.subset tx t then Ta.any
       else if Ta.disjoint t tx then Ta.empty
-      else raise (Refine (x,t))
+      else (
+(*	Format.fprintf Format.std_formatter "Refine@.tx:%a@.tres:%a@."
+	  Ta.print tx Ta.print t;
+	flush stdout; *)
+	raise (Refine (x,t))
+      )
   | ERand t' -> if Ta.subset t' t then Ta.any else Ta.empty
   | ECond (e,t',e1,e2) ->
       inter 
@@ -84,7 +91,8 @@ let rec infer env e t () =
 
 and infer_sub env uid dir e v t =
   let i = (env,uid,t) in
-  try match Memo.find infer_memo i with Type t -> t | Exn exn -> raise exn
+  try 
+    match Memo.find infer_memo i with Type t -> t | Exn exn -> raise exn
   with Not_found ->
     let d = Ta.mk () in
     let r = 
@@ -92,17 +100,20 @@ and infer_sub env uid dir e v t =
     let r = if Ta.is_in v t then Ta.union r Ta.any_atom else r in
     Memo.add infer_memo i (Type r);
     infer_stack := i :: !infer_stack;
+    Ta.def d (infer env e t ());
     (try Ta.def d (infer env e t ())
-     with exn ->
+     with (Refine _) as exn ->
        Memo.replace infer_memo i (Exn exn);
-       infer_stack := unstack i !infer_stack;
+       infer_stack := i :: (unstack i !infer_stack);
        raise exn);
      r
 
 and infer_let env x e1 e2 dom t () =
-  try union (infer env e1 (Ta.neg dom)) (infer (Env.add x dom env) e2 t) ()
-  with Refine (y,tx) when x == y ->
-    inter 
-      (infer_let env x e1 e2 (Ta.inter dom tx) t)
-      (infer_let env x e1 e2 (Ta.diff dom tx) t)
-      ()
+  match (try Type (infer (Env.add x dom env) e2 t ()) with exn -> Exn exn) with
+    | Type t2 -> union (fun () -> t2) (infer env e1 (Ta.neg dom)) ()
+    | Exn (Refine (y,tx)) when x == y ->
+	inter 
+	  (infer_let env x e1 e2 (Ta.inter dom tx) t)
+	  (infer_let env x e1 e2 (Ta.diff dom tx) t)
+	  ()
+    | Exn exn -> raise exn

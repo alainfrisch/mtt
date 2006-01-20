@@ -47,8 +47,8 @@ let parse prog =
   let rec parse_type g = function
     | Type.Ident "Any" -> Ta.any
     | Type.Ident "Empty" -> Ta.empty
-    | Type.Ident "AnyPair" -> Ta.any_pair
-    | Type.Ident "AnyAtom" -> Ta.any_atom
+    | Type.Ident "Pair" -> Ta.any_pair
+    | Type.Ident "Atom" -> Ta.any_atom
     | Type.Ident x when List.mem x g ->
 	Printf.eprintf "Unguarded recursion on type %s\n" x; exit 1
     | Type.Ident x when not (Hashtbl.mem types x) ->

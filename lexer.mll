@@ -20,6 +20,7 @@ rule token = parse
 	| "else" -> ELSE
 	| "type" -> TYPE
 	| "expr" -> EXPR
+	| "infer" -> INFER
 	| "rand" -> RAND
 	| s -> LIDENT s
     }

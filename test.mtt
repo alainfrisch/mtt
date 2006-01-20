@@ -1,0 +1,10 @@
+/* Flattening */
+
+expr FlattenAux =
+  if Copy in Atom then (Copy,accu)
+  else let accu = >FlattenAux in <FlattenAux
+
+expr Flatten =
+  let accu = 0 in FlattenAux
+
+infer Flatten in (Atom,(Atom,0))
