@@ -1,0 +1,49 @@
+Syntax of types:
+
+T ::=  
+    |  n            Literal atom (signed 31-bit integer)
+    |  (T,T)        Cartesian product
+    |  T & T        Intersection
+    |  T | T        Union
+    |  T - T        Difference
+    |  Any          Universal type
+    |  Empty        Empty type
+    |  Pair         Any pair (= (Any,Any))
+    |  Atom         Any atom
+    |  X            Recursion variable (Identifier starting with uppercase)
+    |  (T)
+
+Loops in types must cross a (_,_) constructor.
+
+
+Syntax of transducers:
+
+E ::=  
+    |  n            Literal atom (signed 31-bit integer)
+    |  (E,E)        Pair constructor
+    |  <E           Move to the left child
+    |  >E           Move to the right child
+    |  if E in T then E else E      Conditional
+    |  let x = E in E               Local binding
+    |  rand(T)      Non-deterministic choice in T
+    |  x            Local variable (Identifier starting with lowercase)
+    |  X            Recursion variable (Identifier starting with uppercase)
+    |  Copy         Copy the input
+    |  (E)
+
+Loops in transducers must cross a < or > constructor.
+The <E and >E transducers return the atom 0 when the current 
+input is not a pair.
+
+
+
+Syntax of phrases:
+
+P ::=  type X = T          Type definition
+    |  expr X = E          Transducer definition
+    |  check E : T -> T    Type-checking
+    |  infer E in T        Backward type-inference
+
+
+A script is simply a sequence of phrases. All the definitions
+are mutually recursive. The commands are evaluated in sequence.
