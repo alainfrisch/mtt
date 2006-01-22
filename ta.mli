@@ -47,3 +47,6 @@ val print: Format.formatter -> t -> unit
 
 val normalize: t -> t
 val normalize2: t -> t
+
+val sample: t -> v
+val print_v:  Format.formatter -> v -> unit

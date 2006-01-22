@@ -1,4 +1,4 @@
-/* Flattening */
+(* Flattening *)
 
 expr FlattenAux =
   if Copy in Atom then (Copy,accu)
@@ -7,16 +7,18 @@ expr FlattenAux =
 expr Flatten =
   let accu = 0 in FlattenAux
 
-/* infer Flatten in (1,(2,(3,0))) */
+check Flatten: (1,2) -> (1,(2,(3,0)))
+
+(* check Flatten : ((1,2),Empty) -> (1,(2,(Atom,0)) *)
 
 type Seq = (Atom,Seq) | 0
 type SeqOne = (1,SeqOne) | 0
-type OnlyOne = (OnlyOne,OnlyOne) | 1 | 2
+type OnlyOne = (OnlyOne,OnlyOne) | 1
 
 check Flatten : OnlyOne -> SeqOne
 
-/*
+(*
 expr SetLeftMost = if Copy in Atom then x else (<SetLeftMost, >Copy)
 
 infer (let x = Copy in SetLeftMost) in ((5,Atom),Atom)
-*/
+*)

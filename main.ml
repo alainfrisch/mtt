@@ -5,23 +5,28 @@ let parse () =
     let i = lexbuf.Lexing.lex_start_p.Lexing.pos_cnum in
     failwith (Format.sprintf "Syntax error at char %i" i)
 
-let infer (e,t) = 
+let infer ppf (e,t) = 
   let s = Mtt.infer Mtt.Env.empty e t () in
 (*  Printf.eprintf "Inferred\n"; flush stderr; *)
-  let s = Ta.normalize s in
+  let s = Ta.normalize s in 
 (*  Printf.eprintf "Normalized\n"; flush stderr; *)
 (*  let s = Ta.normalize2 s in
   Printf.eprintf "Normalized\n"; flush stderr; *)
-  Format.fprintf Format.std_formatter "inferred input:%a@." Ta.print s
+  Format.fprintf ppf "inferred input:%a@." Ta.print s
 
-let check (e,t1,t2) = 
+let check ppf (e,t1,t2) = 
   let s = Mtt.infer Mtt.Env.empty e t2 () in
-  let b = Ta.subset t1 s in
-  Format.fprintf Format.std_formatter "check:%b@." b
+  try
+    let v = Ta.sample (Ta.diff t1 s) in
+    Format.fprintf ppf "check failed, sample:%a@." Ta.print_v v
+  with Not_found ->
+    Format.fprintf ppf "check passed.@."
+
+let ppf = Format.std_formatter
 
 let main () =
   let prog = Syntax.parse (parse ()) in
-  List.iter (function `Check x -> check x | `Infer x -> infer x) prog
+  List.iter (function `Check x -> check ppf x | `Infer x -> infer ppf x) prog
 
 let () = 
   try main ()

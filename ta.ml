@@ -25,6 +25,10 @@ module AtomSet = struct
     | Finite s -> Pt.Set.is_empty s
     | Cofinite _ -> false
 
+  let sample = function
+    | Finite s -> Pt.Set.choose s
+    | Cofinite s -> succ (Pt.Set.max_elt s)
+
   let is_any = function
     | Cofinite s -> Pt.Set.is_empty s
     | Finite _ -> false
@@ -307,3 +311,22 @@ let rec normalize2 t =
     Memo.add normalize2_memo t' t';
     t'
 
+let rec sample seen t =
+  if not (AtomSet.is_empty t.atoms) then Atom (AtomSet.sample t.atoms)
+  else
+    let uid = Trans.uid t.trans in
+    if Pt.Set.mem uid seen then raise Not_found
+    else let seen = Pt.Set.add uid seen in
+    let rec aux = function
+      | [] -> raise Not_found
+      | (t1,t2)::rest ->
+	  try Pair (sample seen t1, sample seen t2)
+	  with Not_found -> aux rest
+    in
+    aux (dnf_trans t.trans)
+
+let sample = sample Pt.Set.empty
+
+let rec print_v ppf = function
+  | Atom i -> Format.fprintf ppf "%i" i
+  | Pair (v1,v2) -> Format.fprintf ppf "(%a,%a)" print_v v1 print_v v2

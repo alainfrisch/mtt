@@ -83,7 +83,11 @@ let parse prog =
     | Expr.Int n -> Mtt.EVal (Ta.Atom n)
     | Expr.Pair (e1,e2) -> Mtt.EPair (parse_expr g e1, parse_expr g e2)
     | Expr.Var x -> Mtt.EVar (parse_var x)
-    | Expr.Random t -> Mtt.ERand (parse_type [] t)
+    | Expr.Random t -> 
+	let t = parse_type [] t in
+	if Ta.is_empty t then
+	  (Printf.eprintf "Cannot rand(_) an empty type\n"; exit 1);
+	Mtt.ERand t
     | Expr.Let (x,e1,e2) -> 
 	Mtt.ELet (parse_var x, parse_expr g e1, parse_expr g e2)
     | Expr.Left e -> 

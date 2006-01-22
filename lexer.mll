@@ -37,9 +37,11 @@ rule token = parse
   | "&" { AMPERSAND }
   | ":" { COLON }
   | "->" { ARROW }
-  | "/*" { comment lexbuf }
+  | "(*" { comment 0 lexbuf }
   | eof { EOF }
 
-and comment = parse
-  | "*/" { token lexbuf }
-  | _    { comment lexbuf }
+and comment depth = parse
+  | "*)" { if (depth = 0) then token lexbuf else comment (pred depth) lexbuf }
+  | "(*" { comment (succ depth) lexbuf }
+  | eof  { failwith "Unterminated comment" }
+  | _    { comment depth lexbuf }

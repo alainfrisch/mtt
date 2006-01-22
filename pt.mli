@@ -1,3 +1,6 @@
+(* Sets and maps over integer implemented as Patricia trees.
+   Code borrowed from J.C. Filliatre. *)
+
 module Set : sig
   type t
   
