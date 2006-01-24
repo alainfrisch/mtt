@@ -1,5 +1,7 @@
 type atom = int
 
+val atom_of_string: string -> atom
+
 type t
 val hash: t -> int
 val equal: t -> t -> bool
@@ -33,6 +35,7 @@ val get_delayed: delayed -> t
 
 (** Emptyness check. *)
 val is_empty: t -> bool
+val is_any: t -> bool
 val subset: t -> t -> bool
 val disjoint: t -> t -> bool
 
@@ -50,3 +53,6 @@ val normalize2: t -> t
 
 val sample: t -> v
 val print_v:  Format.formatter -> v -> unit
+
+
+val singleton: v -> t

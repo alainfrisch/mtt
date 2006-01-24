@@ -1,9 +1,9 @@
 %token TYPE EXPR
-%token<string> UIDENT LIDENT
+%token<string> UIDENT LIDENT TAG
 %token EQUAL COMMA COLON ARROW
 %token EOF
 %token<int> INT
-%token LPAREN RPAREN LET IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK
+%token LPAREN RPAREN LET IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL
 
 %right PIPE DASH
 %right AMPERSAND
@@ -21,9 +21,11 @@ phrase:
  | EXPR UIDENT EQUAL expr { Syntax.Phrase.Expr ($2,$4) }
  | INFER expr IN typ { Syntax.Phrase.Infer ($2,$4) }
  | CHECK expr COLON typ ARROW typ { Syntax.Phrase.Check ($2,$4,$6) }
+ | EVAL expr expr { Syntax.Phrase.Eval($2,$3) }
 
 typ:
  | INT { Syntax.Type.Int $1 }
+ | TAG { Syntax.Type.Tag $1 }
  | LPAREN typ COMMA typ RPAREN { Syntax.Type.Pair ($2,$4) }
  | UIDENT { Syntax.Type.Ident $1 }
  | typ AMPERSAND typ { Syntax.Type.And ($1,$3) }
@@ -36,6 +38,7 @@ expr:
  | LIDENT { Syntax.Expr.Var $1 }
  | LET LIDENT EQUAL expr IN expr { Syntax.Expr.Let ($2,$4,$6) }
  | INT { Syntax.Expr.Int $1 }
+ | TAG { Syntax.Expr.Tag $1 }
  | LEFT expr { Syntax.Expr.Left $2 }
  | RIGHT expr { Syntax.Expr.Right $2 }
  | IF expr IN typ THEN expr ELSE expr { Syntax.Expr.Cond ($2,$4,$6,$8) }

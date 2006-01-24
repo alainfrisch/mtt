@@ -2,6 +2,7 @@ module Type = struct
   type t =
     | Ident of string
     | Int of int
+    | Tag of string
     | Pair of t * t
     | And of t * t
     | Or of t * t
@@ -15,6 +16,7 @@ module Expr = struct
     | Var of string
     | Let of string * t * t
     | Int of int
+    | Tag of string
     | Left of t
     | Right of t
     | Cond of t * Type.t * t * t
@@ -27,6 +29,7 @@ module Phrase = struct
     | Expr of string * Expr.t
     | Infer of Expr.t * Type.t
     | Check of Expr.t * Type.t * Type.t
+    | Eval of Expr.t * Expr.t
 end
 
 let parse prog =
@@ -56,6 +59,7 @@ let parse prog =
 	Printf.eprintf "Cannot resolve type %s\n" x; exit 1
     | Type.Ident x -> parse_type (x::g) (Hashtbl.find types x)
     | Type.Int n -> Ta.atom n
+    | Type.Tag s -> Ta.atom (Ta.atom_of_string s)
     | Type.Pair (t1,t2) ->
 	Ta.inter (Ta.fst (parse_type_node t1)) (Ta.snd (parse_type_node t2))
     | Type.And (t1,t2) -> Ta.inter (parse_type g t1) (parse_type g t2)
@@ -81,6 +85,7 @@ let parse prog =
 	Printf.eprintf "Cannot resolve expression %s\n" x; exit 1
     | Expr.Ident x -> parse_expr (x::g) (Hashtbl.find exprs x)
     | Expr.Int n -> Mtt.EVal (Ta.Atom n)
+    | Expr.Tag s -> Mtt.EVal (Ta.Atom (Ta.atom_of_string s))
     | Expr.Pair (e1,e2) -> Mtt.EPair (parse_expr g e1, parse_expr g e2)
     | Expr.Var x -> Mtt.EVar (parse_var x)
     | Expr.Random t -> 
@@ -108,17 +113,31 @@ let parse prog =
       n
   in
 
+  let parse_val e =
+    let rec aux = function
+      | Mtt.EVal v -> v
+      | Mtt.EPair (e1,e2) -> Ta.Pair (aux e1, aux e2)
+      | _ -> 
+	  (Printf.eprintf "Not a value\n"; exit 1);
+    in
+    aux (parse_expr [] e)
+  in
+
+
   let cmds = ref [] in
   List.iter 
     (function 
        | Phrase.Type (x,t) -> Hashtbl.add types x t
        | Phrase.Expr (x,e) -> Hashtbl.add exprs x e
        | Phrase.Infer (e,t) -> cmds := `Infer (e,t) :: !cmds
-       | Phrase.Check (e,t1,t2) -> cmds := `Check (e,t1,t2) :: !cmds) prog;
+       | Phrase.Check (e,t1,t2) -> cmds := `Check (e,t1,t2) :: !cmds
+       | Phrase.Eval (e1,e2) -> cmds := `Eval (e1,e2) :: !cmds) prog;
   List.rev_map 
     (function
        | `Infer (e,t) -> 
 	   `Infer (parse_expr [] e, parse_type [] t)
        | `Check (e,t1,t2) -> 
 	   `Check (parse_expr [] e, parse_type [] t1, parse_type [] t2)
+       | `Eval (e1,e2) ->
+	   `Eval (parse_expr [] e1, parse_val e2)
     ) !cmds

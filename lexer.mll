@@ -23,9 +23,11 @@ rule token = parse
 	| "infer" -> INFER
 	| "rand" -> RAND
 	| "check" -> CHECK
+	| "eval" -> EVAL
 	| s -> LIDENT s
     }
   | uppercase identchar* { UIDENT (Lexing.lexeme lexbuf) }
+  | '`' identchar* { TAG (Lexing.lexeme lexbuf) }
   | "=" { EQUAL }
   | "," { COMMA }
   | ['0'-'9']+ { INT (int_of_string (Lexing.lexeme lexbuf)) }

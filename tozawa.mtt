@@ -1,0 +1,43 @@
+type Input = (`doc, ((`preface,((`header,0),Paras)), Blocs))
+type Blocs = 0 | (Div|P|Note,Blocs)
+type Div = (`div,Blocs)
+type Paras = 0 | (P,Paras)
+type P = (`p,0)
+type Note = (`note,Paras)
+
+type Output = (`doc,T1)
+type T1 = (Div'|P,T1) | ((`appendix,((`header,0),Paras)),0)
+type T2 = (Div'|P,T1) | 0
+type Div' = (`div,T2)
+
+
+expr Body =
+  if <Copy in `preface|`note then rest 
+  else ((<Copy,let rest = 0 in >BodyStar),rest)
+
+expr BodyStar =
+  if Copy in Atom then rest else 
+  let rest = >BodyStar in <Body
+
+expr Prepend =
+  if Copy in Atom then rest else
+  (<Copy, >Prepend)
+
+expr Rest =
+  if <Copy in `preface|`note then >Prepend
+  else >RestStar
+
+expr RestStar =
+  if Copy in Atom then rest else 
+  let rest = >RestStar in <Rest
+
+expr Appendix =
+  let rest = 0 in
+  let rest = ((`appendix, >RestStar),0) in
+  (`doc,>BodyStar)
+
+infer Appendix in Output
+check Appendix : Input -> Output
+
+
+eval Appendix (`doc, ((`preface,((`header,0),0)), ((`note,((`p,0),0)),0)))
