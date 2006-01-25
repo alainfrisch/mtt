@@ -183,12 +183,23 @@ exception NotEmpty
 
 type slot = { mutable status : status; 
               mutable notify : notify;
-              mutable active : bool }
-and status = Empty | NEmpty of v | Maybe
+              mutable active : bool;
+	      mutable unknown : bool;
+	      org: Trans.t;
+	    }
+and status = Empty | NEmpty of v | Maybe | Unknown
 and notify = Nothing | Do of slot * (v -> unit) * notify
 
-let slot_empty = { status = Empty; active = false; notify = Nothing }
-let slot_not_empty v = { status = NEmpty v; active = false; notify = Nothing }
+exception Undefined
+
+let slot_empty = 
+  { org = Trans.zero; status = Empty; active = false; notify = Nothing;
+    unknown = false
+  }
+let slot_not_empty v = 
+  { org = Trans.zero; status = NEmpty v; active = false; notify = Nothing;
+    unknown = false
+  }
 
 let rec notify v = function
   | Nothing -> ()
@@ -206,7 +217,7 @@ let guard a f n = match a with
   | { status = Empty } -> ()
   | { status = Maybe } as s -> n.active <- true; s.notify <- Do (n,f,s.notify)
   | { status = NEmpty v } -> f v
-
+  | { status = Unknown } -> assert false
 
 module TransHash = Hashtbl.Make(Trans)
 let memo = TransHash.create 8191
@@ -231,11 +242,13 @@ let rec slot t =
 				  | Fst x -> Format.fprintf ppf "L%i" x.uid
 				  | Snd x -> Format.fprintf ppf "R%i" x.uid))
 	  (Trans.formula tr); *)
-      let s = { status = Maybe; active = false; notify = Nothing } in
+      let s = { org = tr; status = Maybe; active = false; notify = Nothing;
+		unknown = false
+	      } in
       TransHash.add memo tr s;
       (try 
 	 check_times s tr;
-         if s.active then marks := s :: !marks else s.status <- Empty
+         if s.active || s.unknown then marks := s :: !marks else s.status <- Empty
        with NotEmpty -> ());
       s
 
@@ -246,27 +259,45 @@ and check_times s t =
       (fun v t -> 
 	 match v with
 	   | Fst x ->
-	       let accu1 = inter accu1 x in
+	       if x.undef then s.unknown <- true
+	       else let accu1 = inter accu1 x in
 	       guard (slot accu1) (fun v1 -> aux v1 v2 accu1 accu2 t) s
 	   | Snd x ->
-	       let accu2 = inter accu2 x in
+	       if x.undef then s.unknown <- true
+	       else let accu2 = inter accu2 x in
 	       guard (slot accu2) (fun v2 -> aux v1 v2 accu1 accu2 t) s)
       ~neg:
       (fun v t -> 
 	 match v with
 	   | Fst x ->
-	       let accu1 = diff accu1 x in
+	       if x.undef then s.unknown <- true
+	       else let accu1 = diff accu1 x in
 	       guard (slot accu1) (fun v1 -> aux v1 v2 accu1 accu2 t) s
 	   | Snd x ->
-	       let accu2 = diff accu2 x in
+	       if x.undef then s.unknown <- true
+	       else let accu2 = diff accu2 x in
 	       guard (slot accu2) (fun v2 -> aux v1 v2 accu1 accu2 t) s)
       (fun () -> set s (Pair(v1,v2)))
       t
   in
   aux (Atom 0) (Atom 0) any any t
 
+let rec mark_unknown s =
+  s.status <- Unknown;
+  TransHash.remove memo s.org;
+  let rec aux = function
+    | Nothing -> ()
+    | Do (n,_,rem) -> if n.status == Maybe then mark_unknown n; aux rem
+  in
+  aux s.notify
+
+
 let sample t =
   let s = slot t in
+  List.iter
+    (fun s' ->
+       if s'.status == Maybe && s'.unknown then mark_unknown s')
+    !marks;
   List.iter 
     (fun s' -> 
        if s'.status == Maybe then s'.status <- Empty; s'.notify <- Nothing) 
@@ -275,6 +306,7 @@ let sample t =
   match s.status with 
     | Empty -> None 
     | NEmpty v -> Some v 
+    | Unknown -> raise Undefined
     | Maybe -> assert false
 
 let is_empty t = sample t == None

@@ -34,6 +34,7 @@ val def: delayed -> t -> unit
 val get_delayed: delayed -> t
 
 (** Emptyness check. *)
+exception Undefined
 val is_empty: t -> bool
 val is_any: t -> bool
 val subset: t -> t -> bool

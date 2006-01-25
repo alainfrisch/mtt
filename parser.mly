@@ -1,7 +1,7 @@
 %token TYPE EXPR
 %token<string> UIDENT LIDENT TAG
 %token EQUAL COMMA COLON ARROW
-%token EOF
+%token EOF LBRACKET RBRACKET
 %token<int> INT
 %token LPAREN RPAREN LET IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL
 
@@ -45,4 +45,9 @@ expr:
  | LPAREN expr RPAREN { $2 }
  | LPAREN expr COMMA expr RPAREN { Syntax.Expr.Pair ($2,$4) }
  | RAND LPAREN typ RPAREN { Syntax.Expr.Random $3 }
+ | TAG LBRACKET expr_list RBRACKET { Syntax.Expr.Pair(Syntax.Expr.Tag $1,$3) }
 
+expr_list:
+ | expr COMMA expr_list { Syntax.Expr.Pair ($1,$3) }
+ | expr { Syntax.Expr.Pair($1, Syntax.Expr.Int 0) }
+ | { Syntax.Expr.Int 0 }

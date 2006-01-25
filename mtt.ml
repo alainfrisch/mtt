@@ -33,13 +33,23 @@ let infer_stack = ref []
 
 let ppf = Format.std_formatter
 
+let is_empty t =
+(*  Ta.is_trivially_empty t *)
+  try Ta.is_empty t
+  with Ta.Undefined -> false
+
+let is_any t =
+(*  Ta.is_trivially_any t *)
+  try Ta.is_any t
+  with Ta.Undefined -> false
+
 let union f1 f2 () =
   let t1 = f1 () in
-  if Ta.is_any (*is_trivially_any*) t1 then Ta.any else Ta.union t1 (f2 ())
+  if is_any (*is_trivially_any*) t1 then Ta.any else Ta.union t1 (f2 ())
 
 let inter f1 f2 () =
   let t1 = f1 () in
-  if Ta.is_empty (*is_trivially_empty*) t1 then Ta.empty else Ta.inter t1 (f2 ())
+  if is_empty (*is_trivially_empty*) t1 then Ta.empty else Ta.inter t1 (f2 ())
 
 let rec unstack tr = function
   | hd::tl when hd == tr -> tl
@@ -51,7 +61,7 @@ let rec unstack tr = function
 
 let rec infer env e t () = 
   if Ta.is_empty t then Ta.empty
-  else if Ta.is_empty (Ta.neg t) then Ta.any
+  else if Ta.is_any t then Ta.any
   else
   match e with
   | EVal v -> if Ta.is_in v t then Ta.any else Ta.empty
@@ -120,20 +130,23 @@ and infer_sub env uid dir e v t =
     let r = if Ta.is_in v t then Ta.union r Ta.any_atom else r in
     Memo.add infer_memo i (Type r);
     infer_stack := i :: !infer_stack;
-    (try Ta.def d (infer env e t ())
+    (try 
+       let dt = infer env e t () in
+       Ta.def d dt;
+       if is_any dt then
+	 (let r = if Ta.is_in v t then Ta.any else Ta.any_pair in
+	  Memo.replace infer_memo i (Type r);
+	  r)
+       else
+	 if is_empty dt then
+	   (let r = if Ta.is_in v t then Ta.any_atom else Ta.empty in
+	    Memo.replace infer_memo i (Type r); r)
+	 else r
      with (Refine _) as exn ->
        Memo.replace infer_memo i (Exn exn);
        infer_stack := unstack i !infer_stack;
-       raise exn);
-    if Ta.is_any (Ta.get_delayed d) then
-      (let r = if Ta.is_in v t then Ta.any else Ta.any_pair in
-       Memo.replace infer_memo i (Type r);
-       r)
-    else 
-      if Ta.is_empty (Ta.get_delayed d) then
-	(let r = if Ta.is_in v t then Ta.any_atom else Ta.empty in
-	 Memo.replace infer_memo i (Type r); r)
-      else r
+       raise exn)
+
   
 
 

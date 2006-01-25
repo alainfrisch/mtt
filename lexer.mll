@@ -40,6 +40,8 @@ rule token = parse
   | ":" { COLON }
   | "->" { ARROW }
   | "(*" { comment 0 lexbuf }
+  | "["  { LBRACKET }
+  | "]"  { RBRACKET }
   | eof { EOF }
 
 and comment depth = parse
