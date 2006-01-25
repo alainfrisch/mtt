@@ -1,43 +1,31 @@
-type Input = (`doc, ((`preface,((`header,0),Paras)), Blocs))
-type Blocs = 0 | (Div|P|Note,Blocs)
-type Div = (`div,Blocs)
-type Paras = 0 | (P,Paras)
-type P = (`p,0)
-type Note = (`note,Paras)
+type Input = doc[ preface[ header[], Paras ], Blocs ]
+type Blocs = () | div[Blocs],Blocs | p[],Blocs | note[Paras]
+type Paras = () | p[],Paras
 
-type Output = (`doc,T1)
-type T1 = (Div'|P,T1) | ((`appendix,((`header,0),Paras)),0)
-type T2 = (Div'|P,T1) | 0
-type Div' = (`div,T2)
-
+type Output = doc[T1]
+type T1 = div[T2],T1 | p[],T1 | appendix[ header[], Paras ]
+type T2 = div[T2],T2 | p[],T2 | ()
 
 expr Body =
-  if <Copy in `preface|`note then rest 
-  else ((<Copy,let rest = 0 in >BodyStar),rest)
-
-expr BodyStar =
-  if Copy in Atom then rest else 
-  let rest = >BodyStar in <Body
+  if Copy in () then rest
+  else if Copy in preface[Any],Any | note[Any],Any then >Body
+  else _[let rest = () in <Body], >Body
 
 expr Prepend =
-  if Copy in Atom then rest else
-  (<Copy, >Prepend)
+  if Copy in () then rest
+  else _[<Copy],>Prepend
 
 expr Rest =
-  if <Copy in `preface|`note then >Prepend
-  else >RestStar
-
-expr RestStar =
-  if Copy in Atom then rest else 
-  let rest = >RestStar in <Rest
+  if Copy in () then rest
+  else let rest = >Rest in
+  if Copy in preface[Any],Any | note[Any],Any then <Prepend
+  else rest
 
 expr Appendix =
-  let rest = 0 in
-  let rest = ((`appendix, >RestStar),0) in
-  (`doc,>BodyStar)
+  let rest = () in
+  let rest = appendix[<Rest] in
+  doc[<Body]
 
-infer Appendix in Output
-check Appendix : Input -> Output
+eval Appendix doc[ preface[ header[p3[]] ], p1[], p2[], note[ z[]]  ]
 
-
-eval Appendix (`doc, ((`preface,((`header,0),0)), ((`note,((`p,0),0)),0)))
+check Appendix: Input -> Output

@@ -5,9 +5,9 @@
 %token<int> INT
 %token LPAREN RPAREN LET IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL
 
-%nonassoc COMMA
 %right PIPE DASH
 %right AMPERSAND
+%nonassoc COMMA
 
 %start prog
 %type <Syntax.Phrase.t list> prog
