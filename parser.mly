@@ -1,10 +1,11 @@
 %token TYPE EXPR
 %token<string> UIDENT LIDENT TAG
 %token EQUAL COMMA COLON ARROW
-%token EOF LBRACKET RBRACKET
+%token EOF LBRACKET RBRACKET UNDERSCORE
 %token<int> INT
 %token LPAREN RPAREN LET IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL
 
+%nonassoc COMMA
 %right PIPE DASH
 %right AMPERSAND
 
@@ -18,36 +19,45 @@ prog:
 
 phrase:
  | TYPE UIDENT EQUAL typ { Syntax.Phrase.Type ($2,$4) }
- | EXPR UIDENT EQUAL expr { Syntax.Phrase.Expr ($2,$4) }
+ | EXPR UIDENT EQUAL expr { Syntax.Phrase.Expr ($2,$4) } 
  | INFER expr IN typ { Syntax.Phrase.Infer ($2,$4) }
  | CHECK expr COLON typ ARROW typ { Syntax.Phrase.Check ($2,$4,$6) }
  | EVAL expr expr { Syntax.Phrase.Eval($2,$3) }
 
 typ:
- | INT { Syntax.Type.Int $1 }
- | TAG { Syntax.Type.Tag $1 }
- | LPAREN typ COMMA typ RPAREN { Syntax.Type.Pair ($2,$4) }
+ | LPAREN RPAREN { Syntax.Type.Eps }
+ | LIDENT LBRACKET typ_opt RBRACKET typ_rest { Syntax.Type.Elt ($1,$3,$5) }
  | UIDENT { Syntax.Type.Ident $1 }
  | typ AMPERSAND typ { Syntax.Type.And ($1,$3) }
  | typ PIPE typ { Syntax.Type.Or ($1,$3) }
  | typ DASH typ { Syntax.Type.Diff ($1,$3) }
  | LPAREN typ RPAREN { $2 }
 
+typ_opt:
+ | typ { $1 }
+ |     { Syntax.Type.Eps }
+
+typ_rest:
+ | COMMA typ { $2 }
+ |           { Syntax.Type.Eps }
+
 expr:
- | UIDENT { Syntax.Expr.Ident $1 }
  | LIDENT { Syntax.Expr.Var $1 }
+ | UIDENT { Syntax.Expr.Ident $1 }
  | LET LIDENT EQUAL expr IN expr { Syntax.Expr.Let ($2,$4,$6) }
- | INT { Syntax.Expr.Int $1 }
- | TAG { Syntax.Expr.Tag $1 }
  | LEFT expr { Syntax.Expr.Left $2 }
  | RIGHT expr { Syntax.Expr.Right $2 }
  | IF expr IN typ THEN expr ELSE expr { Syntax.Expr.Cond ($2,$4,$6,$8) }
  | LPAREN expr RPAREN { $2 }
- | LPAREN expr COMMA expr RPAREN { Syntax.Expr.Pair ($2,$4) }
+ | LIDENT LBRACKET expr_opt RBRACKET expr_rest { Syntax.Expr.Elt ($1,$3,$5) }
+ | UNDERSCORE LBRACKET expr_opt RBRACKET expr_rest { Syntax.Expr.CopyTag ($3,$5) }
  | RAND LPAREN typ RPAREN { Syntax.Expr.Random $3 }
- | TAG LBRACKET expr_list RBRACKET { Syntax.Expr.Pair(Syntax.Expr.Tag $1,$3) }
+ | LPAREN RPAREN { Syntax.Expr.Eps }
 
-expr_list:
- | expr COMMA expr_list { Syntax.Expr.Pair ($1,$3) }
- | expr { Syntax.Expr.Pair($1, Syntax.Expr.Int 0) }
- | { Syntax.Expr.Int 0 }
+expr_opt:
+ | expr { $1 }
+ |     { Syntax.Expr.Eps }
+
+expr_rest:
+ | COMMA expr { $2 }
+ |           { Syntax.Expr.Eps }

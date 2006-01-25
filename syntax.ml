@@ -1,9 +1,8 @@
 module Type = struct
   type t =
     | Ident of string
-    | Int of int
-    | Tag of string
-    | Pair of t * t
+    | Eps
+    | Elt of string * t * t
     | And of t * t
     | Or of t * t
     | Diff of t * t
@@ -15,12 +14,12 @@ module Expr = struct
     | Random of Type.t
     | Var of string
     | Let of string * t * t
-    | Int of int
-    | Tag of string
     | Left of t
     | Right of t
     | Cond of t * Type.t * t * t
-    | Pair of t * t
+    | Eps
+    | Elt of string * t * t
+    | CopyTag of t * t
 end
 
 module Phrase = struct
@@ -51,17 +50,14 @@ let parse prog =
   let rec parse_type g = function
     | Type.Ident "Any" -> Ta.any
     | Type.Ident "Empty" -> Ta.empty
-    | Type.Ident "Pair" -> Ta.any_pair
-    | Type.Ident "Atom" -> Ta.any_atom
     | Type.Ident x when List.mem x g ->
 	Printf.eprintf "Unguarded recursion on type %s\n" x; exit 1
     | Type.Ident x when not (Hashtbl.mem types x) ->
 	Printf.eprintf "Cannot resolve type %s\n" x; exit 1
     | Type.Ident x -> parse_type (x::g) (Hashtbl.find types x)
-    | Type.Int n -> Ta.atom n
-    | Type.Tag s -> Ta.atom (Ta.atom_of_string s)
-    | Type.Pair (t1,t2) ->
-	Ta.inter (Ta.fst (parse_type_node t1)) (Ta.snd (parse_type_node t2))
+    | Type.Eps -> Ta.eps
+    | Type.Elt (x,t1,t2) ->
+	Ta.elt (Ta.atom_of_string x) (parse_type_node t1) (parse_type_node t2)
     | Type.And (t1,t2) -> Ta.inter (parse_type g t1) (parse_type g t2)
     | Type.Or (t1,t2) -> Ta.union (parse_type g t1) (parse_type g t2)
     | Type.Diff (t1,t2) -> Ta.diff (parse_type g t1) (parse_type g t2)
@@ -84,9 +80,11 @@ let parse prog =
     | Expr.Ident x when not (Hashtbl.mem exprs x) ->
 	Printf.eprintf "Cannot resolve expression %s\n" x; exit 1
     | Expr.Ident x -> parse_expr (x::g) (Hashtbl.find exprs x)
-    | Expr.Int n -> Mtt.EVal (Ta.Atom n)
-    | Expr.Tag s -> Mtt.EVal (Ta.Atom (Ta.atom_of_string s))
-    | Expr.Pair (e1,e2) -> Mtt.EPair (parse_expr g e1, parse_expr g e2)
+    | Expr.Eps -> Mtt.EVal Ta.Eps
+    | Expr.Elt (x,e1,e2) -> 
+	Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, parse_expr g e2)
+    | Expr.CopyTag (e1,e2) -> 
+	Mtt.ECopyTag (parse_expr g e1, parse_expr g e2)
     | Expr.Var x -> Mtt.EVar (parse_var x)
     | Expr.Random t -> 
 	let t = parse_type [] t in
@@ -96,11 +94,9 @@ let parse prog =
     | Expr.Let (x,e1,e2) -> 
 	Mtt.ELet (parse_var x, parse_expr g e1, parse_expr g e2)
     | Expr.Left e -> 
-	Mtt.ESub ((incr expr_id; !expr_id), Mtt.Fst, parse_expr_node e,
-		 Ta.Atom 0)
+	Mtt.ESub ((incr expr_id; !expr_id), Mtt.Fst, parse_expr_node e)
     | Expr.Right e -> 
-	Mtt.ESub ((incr expr_id; !expr_id), Mtt.Snd, parse_expr_node e,
-		 Ta.Atom 0)
+	Mtt.ESub ((incr expr_id; !expr_id), Mtt.Snd, parse_expr_node e)
     | Expr.Cond (e,t,e1,e2) ->
 	Mtt.ECond (parse_expr g e, parse_type [] t,
 		   parse_expr g e1, parse_expr g e2)
@@ -116,7 +112,7 @@ let parse prog =
   let parse_val e =
     let rec aux = function
       | Mtt.EVal v -> v
-      | Mtt.EPair (e1,e2) -> Ta.Pair (aux e1, aux e2)
+      | Mtt.EElt (i,e1,e2) -> Ta.Elt (i, aux e1, aux e2)
       | _ -> 
 	  (Printf.eprintf "Not a value\n"; exit 1);
     in

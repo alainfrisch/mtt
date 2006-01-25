@@ -6,13 +6,14 @@ type dir = Fst | Snd
 
 type expr =
   | EVal of Ta.v
-  | EPair of expr * expr
+  | EElt of Ta.atom * expr * expr
+  | ECopyTag of expr * expr
   | ECopy
   | EVar of var
   | ELet of var * expr * expr
   | ECond of expr * Ta.t * expr * expr
   | ERand of Ta.t
-  | ESub of int * dir * expr ref * Ta.v
+  | ESub of int * dir * expr ref
 
 module Input = struct
   type t = Ta.t Env.t * int * Ta.t
@@ -89,7 +90,24 @@ let rec infer env e t () =
       else Ta.union 
 	(Ta.inter t0 (infer env e1 t ()))
 	(Ta.diff (infer env e2 t ()) t0) *)
-  | EPair (e1,e2) ->
+  | ECopyTag (e1,e2) ->
+      let accu = if Ta.is_in Ta.Eps t then Ta.any else Ta.noneps in
+      let dom,tr_def,tr = Ta.dnf_neg_all t in
+      let f b = 
+	List.fold_left
+	 (fun accu (t1,t2) ->
+	    let r = 
+	      union 
+		(infer env e1 (Ta.neg t1)) 
+		(infer env e2 (Ta.neg t2)) () in
+	    let accu = Ta.inter accu (Ta.union b r) in
+	    if Ta.is_trivially_empty accu then raise Exit else accu)
+      in
+      (try
+	 let accu = f (Ta.tag_in dom) accu tr_def in
+	 List.fold_left (fun accu (i,x) -> f (Ta.nottag i) accu x) accu tr
+       with Exit -> Ta.empty)
+  | EElt (i,e1,e2) ->
       (try List.fold_left
 	 (fun accu (t1,t2) ->
 	    let r = 
@@ -99,7 +117,7 @@ let rec infer env e t () =
 	    let accu = Ta.inter accu r in
 	    if Ta.is_trivially_empty accu then raise Exit else accu)
 	 Ta.any
-	 (Ta.dnf_neg_pair t)
+	 (Ta.dnf_neg_pair i t)
        with Exit -> Ta.empty)
 (*
       (try List.fold_left
@@ -116,10 +134,10 @@ let rec infer env e t () =
 	 (Ta.dnf_pair t)
        with Exit -> Ta.any)
       *)
-  | ESub (uid,dir,e,v) -> infer_sub env uid dir !e v t
+  | ESub (uid,dir,e) -> infer_sub env uid dir !e t
   | ELet (x,e1,e2) -> infer_let env x e1 e2 Ta.any t ()
 
-and infer_sub env uid dir e v t =
+and infer_sub env uid dir e t =
  let i = (env,uid,t) in
   try 
     match Memo.find infer_memo i with Type t -> t | Exn exn -> raise exn
@@ -127,19 +145,19 @@ and infer_sub env uid dir e v t =
     let d = Ta.mk () in
     let r =
       (match dir with Fst -> Ta.fst | Snd -> Ta.snd) (Ta.get_delayed d) in
-    let r = if Ta.is_in v t then Ta.union r Ta.any_atom else r in
+    let r = if Ta.is_in Ta.Eps t then Ta.union r Ta.eps else r in
     Memo.add infer_memo i (Type r);
     infer_stack := i :: !infer_stack;
     (try 
        let dt = infer env e t () in
        Ta.def d dt;
        if is_any dt then
-	 (let r = if Ta.is_in v t then Ta.any else Ta.any_pair in
+	 (let r = if Ta.is_in Ta.Eps t then Ta.any else Ta.noneps in
 	  Memo.replace infer_memo i (Type r);
 	  r)
        else
 	 if is_empty dt then
-	   (let r = if Ta.is_in v t then Ta.any_atom else Ta.empty in
+	   (let r = if Ta.is_in Ta.Eps t then Ta.eps else Ta.empty in
 	    Memo.replace infer_memo i (Type r); r)
 	 else r
      with (Refine _) as exn ->
@@ -174,7 +192,11 @@ and infer_let env x e1 e2 dom t () =
 let rec eval env e v =
   match e with
     | EVal v' -> v'
-    | EPair (e1,e2) -> Ta.Pair (eval env e1 v, eval env e2 v)
+    | EElt (i,e1,e2) -> Ta.Elt (i,eval env e1 v, eval env e2 v)
+    | ECopyTag (e1,e2) ->
+	(match v with
+	   | Ta.Eps -> Ta.Eps
+	   | Ta.Elt (i,_,_) -> Ta.Elt (i, eval env e1 v, eval env e2 v))
     | ECopy -> v
     | EVar x -> Pt.Map.find x env
     | ELet (x,e1,e2) -> eval (Pt.Map.add x (eval env e1 v) env) e2 v
@@ -182,9 +204,9 @@ let rec eval env e v =
 	if Ta.is_in (eval env e v) t then eval env e1 v
 	else eval env e2 v
     | ERand t -> Ta.sample t
-    | ESub (_,dir,{ contents = e },v0) ->
+    | ESub (_,dir,{ contents = e }) ->
 	match v with
-	  | Ta.Atom _ -> v0
-	  | Ta.Pair (v1,v2) -> eval env e (if dir = Fst then v1 else v2)
+	  | Ta.Eps -> Ta.Eps
+	  | Ta.Elt (i,v1,v2) -> eval env e (if dir = Fst then v1 else v2)
 
 let eval = eval Pt.Map.empty

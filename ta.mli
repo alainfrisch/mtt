@@ -18,14 +18,15 @@ val neg: t -> t
 val is_trivially_empty: t -> bool
 val is_trivially_any: t -> bool
 
-(** Sets of pairs. *)
-val any_pair: t  (** Any pair. *)
+val eps: t
 val fst: t -> t  (** Any pair whose first component is as given. *)
 val snd: t -> t  (** Any pair whose second component is as given. *)
-
-(** Sets of atoms. *)
-val any_atom: t
-val atom: atom -> t
+val elt: atom -> t -> t -> t
+val tag: atom -> t
+val nottag: atom -> t
+val noneps: t
+val tag_in: Pt.Set.t -> t
+val tag_not_in: Pt.Set.t -> t
 
 (** Delayed creation. *)
 type delayed
@@ -40,17 +41,23 @@ val is_any: t -> bool
 val subset: t -> t -> bool
 val disjoint: t -> t -> bool
 
-type v = Atom of atom | Pair of v * v
+type v = Eps | Elt of atom * v * v
 val is_in: v -> t -> bool
 
+(*
 val dnf_pair: t -> (t * t) list
-val dnf_neg_pair: t -> (t * t) list
+*)
+
+val dnf_neg_pair: atom -> t -> (t * t) list
+val dnf_neg_all: t -> Pt.Set.t * (t * t) list * (atom * (t * t) list) list
 
 
 val print: Format.formatter -> t -> unit
 
+(*
 val normalize: t -> t
 val normalize2: t -> t
+*)
 
 val sample: t -> v
 val print_v:  Format.formatter -> v -> unit

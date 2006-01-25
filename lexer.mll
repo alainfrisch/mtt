@@ -3,7 +3,7 @@
 }
 
 let blank = [' ' '\009' '\012' '\010' '\013' ]
-let lowercase = ['a'-'z' '\223'-'\246' '\248'-'\255' '_']
+let lowercase = ['a'-'z' '\223'-'\246' '\248'-'\255']
 let uppercase = ['A'-'Z' '\192'-'\214' '\216'-'\222']
 let identchar =
   ['A'-'Z' 'a'-'z' '_' '\192'-'\214' '\216'-'\246' '\248'-'\255' '\'' '0'-'9']
@@ -42,6 +42,7 @@ rule token = parse
   | "(*" { comment 0 lexbuf }
   | "["  { LBRACKET }
   | "]"  { RBRACKET }
+  | "_"  { UNDERSCORE }
   | eof { EOF }
 
 and comment depth = parse

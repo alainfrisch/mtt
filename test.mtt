@@ -1,3 +1,4 @@
+(*
 (* Flattening *)
 
 expr FlattenAux =
@@ -22,3 +23,17 @@ expr SetLeftMost = if Copy in Atom then x else (<SetLeftMost, >Copy)
 
 infer (let x = Copy in SetLeftMost) in ((5,Atom),Atom)
 *)
+
+*)
+
+expr FlattenAux =
+  if Copy in () then accu else 
+  let accu = >FlattenAux in
+  let accu = <FlattenAux in
+  _[], accu
+
+expr Flatten =
+  let accu = () in FlattenAux
+
+(*eval Flatten  a[b[]],c[d[]] *)
+check Flatten : a[b[]],b[] -> a[],b[]

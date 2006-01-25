@@ -80,6 +80,10 @@ module Map : sig
     
   val singleton : int -> 'a -> 'a t
     
+  val constant : Set.t -> 'a -> 'a t
+
+  val domain : 'a t -> Set.t
+
   val add : int -> 'a -> 'a t -> 'a t
     
   val find : int -> 'a t -> 'a
@@ -117,4 +121,10 @@ module Map : sig
   val diff : ('a -> 'b -> 'a option) -> 'a t -> 'b t -> 'a t
 
   val restrict  : 'a t -> Set.t -> 'a t
+
+  val combine : ('a -> 'b -> 'c) -> 'a -> 'b -> 'a t -> 'b t -> 'c t
+
+  val filter : (int -> 'a -> bool) -> 'a t -> 'a t
+
+  val outdomain: 'a t -> int
 end

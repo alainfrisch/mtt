@@ -567,7 +567,7 @@ let rec union f t1 t2 = match (t1,t2) with
   | Empty, t | t, Empty -> t
   | (Leaf (k,x) as t0), t | t, (Leaf (k,x) as t0) -> 
       let rec ins = function
-	| Empty -> Leaf (k, x)
+	| Empty -> t0
 	| Leaf (j,y) as t -> 
 	    if j == k then Leaf (k,f x y) else join (k, t0, j, t)
 	| Branch (p,m,l,r) as t ->
@@ -664,5 +664,80 @@ let rec restrict t1 t2 = match (t1,t2) with
       else
 	s
 
+let rec combine f d1 d2 t1 t2 = match (t1,t2) with
+  | t, Empty -> map (fun x -> f x d2) t
+  | Empty, t -> map (fun x -> f d1 x) t
+  | Leaf (k,x), _ ->
+      let rec ins = function
+	| Empty -> Leaf (k, f x d2)
+	| Leaf (j,y) -> 
+	    if j == k then Leaf (k,f x y) else join (k, Leaf (k,f x d2), 
+						     j, Leaf (j,f d1 y))
+	| Branch (p,m,l,r) as t ->
+	    if match_prefix k p m then
+	      if zero_bit k m then 
+		Branch (p, m, ins l, map (fun x -> f d1 x) r)
+	      else
+		Branch (p, m, map (fun x -> f d1 x) l, ins r)
+	    else
+	      join (k, Leaf (k, f x d2), p, map (fun x -> f d1 x) t) in
+      ins t2
+  | _,Leaf (k,x) ->
+      let rec ins = function
+	| Empty -> Leaf (k, f d1 x)
+	| Leaf (j,y) -> 
+	    if j == k then Leaf (k,f y x) else join (k, Leaf (k,f d1 x), 
+						     j, Leaf (j,f y d2))
+	| Branch (p,m,l,r) as t ->
+	    if match_prefix k p m then
+	      if zero_bit k m then 
+		Branch (p, m, ins l, map (fun x -> f x d2) r)
+	      else
+		Branch (p, m, map (fun x -> f x d2) l, ins r)
+	    else
+	      join (k, Leaf (k, f d1 x), p, map (fun x -> f x d2) t) in
+      ins t1
 
+  | (Branch (p,m,s0,s1) as s), (Branch (q,n,t0,t1) as t) ->
+      if m == n && match_prefix q p m then
+	Branch (p, m, combine f d1 d2 s0 t0, combine f d1 d2 s1 t1)
+      else if m < n && match_prefix q p m then
+	(* [q] contains [p]. Merge [t] with a subtree of [s]. *)
+	if zero_bit q m then 
+	  Branch (p, m, combine f d1 d2 s0 t,  map (fun x -> f x d2) s1)
+        else 
+	  Branch (p, m,  map (fun x -> f x d2) s0, combine f d1 d2 s1 t)
+      else if m > n && match_prefix p q n then
+	(* [p] contains [q]. Merge [s] with a subtree of [t]. *)
+	if zero_bit p n then
+	  Branch (q, n, combine f d1 d2 s t0, map (fun x -> f d1 x) t1)
+	else
+	  Branch (q, n, map (fun x -> f d1 x) t0, combine f d1 d2 s t1)
+      else
+	(* The prefixes disagree. *)
+	join (p, map (fun x -> f x d2) s, q, map (fun x -> f d1 x) t)
+
+let rec filter f = function
+  | Empty -> Empty
+  | Leaf (k,x) as t -> if f k x then t else Empty
+  | Branch (p,m,t0,t1) -> branch (p,m,filter f t0,filter f t1)
+
+let rec max_key = function
+  | Empty -> raise Not_found
+  | Leaf (k,_) -> k
+  | Branch (_,_,s,t) -> max (max_key s) (max_key t)
+
+let outdomain = function
+  | Empty -> 0
+  | t -> succ (max_key t)
+
+let rec constant t c = match t with
+  | Set.Empty -> Empty
+  | Set.Leaf k -> Leaf (k,c)
+  | Set.Branch (p,m,t0,t1) -> Branch (p,m,constant t0 c,constant t1 c)
+
+let rec domain = function
+  | Empty -> Set.Empty
+  | Leaf (k,_) -> Set.Leaf k
+  | Branch (p,m,t0,t1) -> Set.Branch (p,m,domain t0,domain t1)
 end

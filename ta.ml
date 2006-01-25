@@ -82,8 +82,9 @@ end
 type 'a fstsnd = Fst of 'a | Snd of 'a
 type 'a node = {
   uid: int;
-  mutable atoms: AtomSet.t;
-  mutable trans: 'a;
+  mutable eps: bool;
+  mutable trans: 'a Pt.Map.t;
+  mutable def: 'a;
   mutable undef: bool;
 }
 
@@ -92,12 +93,17 @@ struct
   type t = Trans.t node
   let equal n1 n2 = 
     (n1 == n2) ||
-      ((Trans.equal n1.trans n2.trans) && (AtomSet.equal n1.atoms n2.atoms))
+      ((n1.eps = n2.eps) &&
+	 (Pt.Map.equal Trans.equal n1.trans n2.trans) && 
+	 (Trans.equal n1.def n2.def))
   let hash n =
-    Trans.hash n.trans + 65537 * (AtomSet.hash n.atoms)
+    (if n.eps then 0 else 1) +
+      17 * (Trans.hash n.def) + 65537 * (Pt.Map.hash Trans.hash n.trans)
+
   let compare n1 n2 =
-    let c = Trans.compare n1.trans n2.trans in
-    if c != 0 then c else AtomSet.compare n1.atoms n2.atoms
+    if n1.eps != n2.eps then if n1.eps then (-1) else 1
+    else let c = Trans.compare n1.def n2.def in
+    if c != 0 then c else Pt.Map.compare Trans.compare n1.trans n2.trans
 end 
 and Trans : Robdd.S with type var = FstSnd.t = Robdd.Make(FstSnd)
 and FstSnd : Robdd.HashedOrdered with type t = Node.t fstsnd = 
@@ -126,18 +132,23 @@ include Node
 
 let cur_id = ref 0
 
-let typ atoms tr = 
-  incr cur_id; { uid = !cur_id; atoms = atoms; trans = tr; undef = false }
+let typ eps tr def = 
+  incr cur_id; 
+  { uid = !cur_id; eps = eps; def = def; 
+    trans = Pt.Map.filter (fun _ d -> not (Trans.equal d def)) tr;
+    undef = false }
 
-let any = typ AtomSet.any Trans.one
-let empty = typ AtomSet.empty Trans.zero
-let any_pair = typ AtomSet.empty Trans.one
-let any_atom = typ AtomSet.any Trans.zero
+let any = typ true Pt.Map.empty Trans.one
+let empty = typ false Pt.Map.empty Trans.zero
+let eps = typ true Pt.Map.empty Trans.zero
+let noneps = typ false Pt.Map.empty Trans.one
+(*let any_pair = typ AtomSet.empty Trans.one
+let any_atom = typ AtomSet.any Trans.zero*)
 
 type delayed = t
 
 let mk () = 
-  let t = typ AtomSet.any Trans.one in
+  let t = typ false Pt.Map.empty Trans.zero in
   t.undef <- true;
   t
 
@@ -145,23 +156,40 @@ let def n t =
 (*  let tr = if AtomSet.is_any t.atoms && 
     Trans.check_var (function Fst m | Snd m -> n == m) t.trans then
       Trans.one else t.trans in *)
-  let tr = t.trans in
-  (*assert(n.undef); *) n.atoms <- t.atoms; n.trans <- tr; n.undef <- false
+  n.eps <- t.eps; 
+  n.trans <- Pt.Map.filter (fun _ d -> not (Trans.equal d t.def)) t.trans; 
+  n.def <- t.def; 
+  n.undef <- false
 let get_delayed t = t
 
 let inter t1 t2 = 
-  typ (AtomSet.inter t1.atoms t2.atoms) (Trans.(&&&) t1.trans t2.trans)
+  typ 
+    (t1.eps && t2.eps) 
+    (Pt.Map.combine Trans.(&&&) t1.def t2.def t1.trans t2.trans) 
+    (Trans.(&&&) t1.def t2.def)
+
 let diff t1 t2 = 
-  typ (AtomSet.diff t1.atoms t2.atoms) (Trans.(---) t1.trans t2.trans)
+  typ 
+    (t1.eps && not t2.eps)
+    (Pt.Map.combine Trans.(---) t1.def t2.def t1.trans t2.trans) 
+    (Trans.(---) t1.def t2.def)
+
 let union t1 t2 = 
-  typ (AtomSet.union t1.atoms t2.atoms) (Trans.(|||) t1.trans t2.trans)
+  typ 
+    (t1.eps || t2.eps) 
+    (Pt.Map.combine Trans.(|||) t1.def t2.def t1.trans t2.trans) 
+    (Trans.(|||) t1.def t2.def)
+
 let neg t =
-  typ (AtomSet.neg t.atoms) (Trans.(~~~) t.trans)
+  typ 
+    (not t.eps)
+    (Pt.Map.map Trans.(~~~) t.trans)
+    (Trans.(~~~) t.def)
 
 let is_trivially_empty t = 
-  not t.undef && Trans.is_zero t.trans && AtomSet.is_empty t.atoms
+  not t.undef && not t.eps && Trans.is_zero t.def && Pt.Map.is_empty t.trans
 let is_trivially_any t = 
-  not t.undef && Trans.is_one t.trans && AtomSet.is_any t.atoms
+  not t.undef && t.eps && Trans.is_one t.def
 
 (*
 let dnf_trans =
@@ -177,7 +205,7 @@ let dnf_trans =
 *)
 
 
-type v = Atom of atom | Pair of v * v
+type v = Eps | Elt of int * v * v
 
 exception NotEmpty
 
@@ -185,7 +213,7 @@ type slot = { mutable status : status;
               mutable notify : notify;
               mutable active : bool;
 	      mutable unknown : bool;
-	      org: Trans.t;
+	      org: Node.t;
 	    }
 and status = Empty | NEmpty of v | Maybe | Unknown
 and notify = Nothing | Do of slot * (v -> unit) * notify
@@ -193,13 +221,15 @@ and notify = Nothing | Do of slot * (v -> unit) * notify
 exception Undefined
 
 let slot_empty = 
-  { org = Trans.zero; status = Empty; active = false; notify = Nothing;
+  { org = empty; status = Empty; active = false; notify = Nothing;
     unknown = false
   }
 let slot_not_empty v = 
-  { org = Trans.zero; status = NEmpty v; active = false; notify = Nothing;
+  { org = empty; status = NEmpty v; active = false; notify = Nothing;
     unknown = false
   }
+let slot_eps = slot_not_empty Eps
+
 
 let rec notify v = function
   | Nothing -> ()
@@ -219,20 +249,17 @@ let guard a f n = match a with
   | { status = NEmpty v } -> f v
   | { status = Unknown } -> assert false
 
-module TransHash = Hashtbl.Make(Trans)
-let memo = TransHash.create 8191
+module THash = Hashtbl.Make(Node)
+let memo = THash.create 8191
 let marks = ref []
 let count = ref 0
 
 let rec slot t =
   if t.undef then (print_endline "XXX\n"; exit 3);
-  if not (AtomSet.is_empty t.atoms) 
-  then slot_not_empty (Atom (AtomSet.sample t.atoms))
+  if t.eps then slot_eps 
+  else if is_trivially_empty t then slot_empty
   else
-    let tr = t.trans in
-    if Trans.is_zero tr then slot_empty
-    else if Trans.is_one tr then slot_not_empty (Pair (Atom 0, Atom 0))
-    else try TransHash.find memo tr
+    try THash.find memo t
     with Not_found ->
       incr count;
 (*      if (!count mod 1000 = 0) then (print_char '.'; flush stdout); *)
@@ -242,17 +269,19 @@ let rec slot t =
 				  | Fst x -> Format.fprintf ppf "L%i" x.uid
 				  | Snd x -> Format.fprintf ppf "R%i" x.uid))
 	  (Trans.formula tr); *)
-      let s = { org = tr; status = Maybe; active = false; notify = Nothing;
+      let s = { org = t; status = Maybe; active = false; notify = Nothing;
 		unknown = false
 	      } in
-      TransHash.add memo tr s;
+      THash.add memo t s;
       (try 
-	 check_times s tr;
-         if s.active || s.unknown then marks := s :: !marks else s.status <- Empty
+	 check_times (Pt.Map.outdomain t.trans) s t.def;
+	 Pt.Map.iter (fun i x -> check_times i s x) t.trans;
+         if s.active || s.unknown then marks := s :: !marks 
+	 else s.status <- Empty
        with NotEmpty -> ());
       s
 
-and check_times s t =
+and check_times i s t =
   let rec aux v1 v2 accu1 accu2 t =
     Trans.decompose
       ~pos:
@@ -277,14 +306,14 @@ and check_times s t =
 	       if x.undef then s.unknown <- true
 	       else let accu2 = diff accu2 x in
 	       guard (slot accu2) (fun v2 -> aux v1 v2 accu1 accu2 t) s)
-      (fun () -> set s (Pair(v1,v2)))
+      (fun () -> set s (Elt(i,v1,v2)))
       t
   in
-  aux (Atom 0) (Atom 0) any any t
+  aux Eps Eps any any t
 
 let rec mark_unknown s =
   s.status <- Unknown;
-  TransHash.remove memo s.org;
+  THash.remove memo s.org;
   let rec aux = function
     | Nothing -> ()
     | Do (n,_,rem) -> if n.status == Maybe then mark_unknown n; aux rem
@@ -364,24 +393,43 @@ let disjoint t1 t2 = is_empty (inter t1 t2)
 let is_equal t1 t2 = subset t1 t2 && subset t2 t1
 
 let fst t = 
-  if not (t.undef) && (is_trivially_any t) then any_pair
-  else typ AtomSet.empty (Trans.(!!!) (Fst t))
+  if not (t.undef) && (is_trivially_any t) then noneps
+  else typ false Pt.Map.empty (Trans.(!!!) (Fst t))
 let snd t =
-  if not (t.undef) && (is_trivially_any t) then any_pair
-  else typ AtomSet.empty (Trans.(!!!) (Snd t))
-let atom i = typ (AtomSet.singleton i) Trans.zero
+  if not (t.undef) && (is_trivially_any t) then noneps
+  else typ false Pt.Map.empty (Trans.(!!!) (Snd t))
+let tag i = 
+  typ false (Pt.Map.singleton i Trans.one) Trans.zero
+let tag_in ts =
+  typ false (Pt.Map.constant ts Trans.one) Trans.zero
+let tag_not_in ts =
+  typ false (Pt.Map.constant ts Trans.zero) Trans.one
+let nottag i = 
+  typ false (Pt.Map.singleton i Trans.zero) Trans.one
 
+(*
 let dnf_pair t = dnf_trans t.trans
+*)
 
-let dnf_neg_pair t = dnf_trans (Trans.(~~~) t.trans)
+let get_trans t i =
+  try Pt.Map.find i t.trans
+  with Not_found -> t.def
+
+let dnf_neg_pair i t = dnf_trans (Trans.(~~~) (get_trans t i))
+
+let dnf_neg_all t =
+  Pt.Map.domain t.trans,
+  dnf_trans (Trans.(~~~) t.def),
+  Pt.Map.fold (fun i x accu -> (i, dnf_trans (Trans.(~~~) x)) :: accu) 
+    t.trans []
 
 
 let rec is_in v t = match v with
-  | Atom i -> AtomSet.is_in i t.atoms
-  | Pair (v1,v2) -> 
+  | Eps -> t.eps
+  | Elt (i,v1,v2) ->
       List.exists 
 	(fun (t1,t2) -> is_in v1 t1 && is_in v2 t2) 
-	(dnf_pair t)  (* todo: don't build the dnf here *)
+	(dnf_trans (get_trans t i))
 
 
 let dump_tr l ppf = function
@@ -408,10 +456,11 @@ let print ppf t =
 	    else if is_equal t any_pair then 
 	      Format.fprintf ppf "%i:=AnyPair@." t.uid
 	    else   *)
-	    Format.fprintf ppf "%i:={atoms:%a;pairs:%a}@." t.uid
-	      AtomSet.print t.atoms
+	      Format.fprintf ppf "%i:=%s_[%a]+...@." t.uid
+		(if t.eps then "() |" else "")
+		(Trans.print_formula (dump_tr l)) (Trans.formula t.def)
+		(* TODO: t.trans ... *)
 (*		(Trans.dump_dnf (dump_tr l)) t.trans *)
-	      (Trans.print_formula (dump_tr l)) (Trans.formula t.trans)
 (*	      (Trans.dump (dump_tr l)) t.trans   *)
 	  );
 	  flush stdout;
@@ -438,6 +487,7 @@ let normalize_dnf l =
 	    
     
 
+(*
 module Memo = Hashtbl.Make(Node)
 
 let normalize_memo = Memo.create 4096
@@ -487,35 +537,22 @@ let rec normalize2 t =
     t'.undef <- false;
     Memo.add normalize2_memo t' t';
     t'
-
-(*
-let rec sample seen t =
-  if not (AtomSet.is_empty t.atoms) then Atom (AtomSet.sample t.atoms)
-  else
-    let uid = Trans.uid t.trans in
-    if Pt.Set.mem uid seen then raise Not_found
-    else let seen = Pt.Set.add uid seen in
-    let rec aux = function
-      | [] -> raise Not_found
-      | (t1,t2)::rest ->
-	  if is_empty t1 || is_empty t2 then aux rest else
-	  try Pair (sample seen t1, sample seen t2)
-	  with Not_found -> aux rest
-    in
-    aux (dnf_trans t.trans)
-
-let sample = sample Pt.Set.empty
 *)
 
-let rec print_v ppf = function
-  | Atom i -> 
-      (try 
-	 let s = Hashtbl.find rev_tags i in
-	 Format.fprintf ppf "%s" s
-       with Not_found -> Format.fprintf ppf "%i" i)
-  | Pair (v1,v2) -> Format.fprintf ppf "(%a,%a)" print_v v1 print_v v2
+let print_tag ppf i = 
+  try 
+    let s = Hashtbl.find rev_tags i in
+    Format.fprintf ppf "%s" s
+  with Not_found -> Format.fprintf ppf "%i" i
 
+let rec print_v ppf = function
+  | Elt (i,v1,v2) -> 
+      Format.fprintf ppf "%a[%a],%a" print_tag i print_v v1 print_v v2
+  | Eps -> Format.fprintf ppf "()"
+
+let elt i t1 t2 =
+  inter (tag i) (inter (fst t1) (snd t2))
 
 let rec singleton = function
-  | Atom i -> atom i
-  | Pair (v1,v2) -> inter (fst (singleton v1)) (snd (singleton v2))
+  | Eps -> eps
+  | Elt (i,v1,v2) -> elt i (singleton v1) (singleton v2)
