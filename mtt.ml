@@ -14,6 +14,7 @@ type expr =
   | ECond of expr * Ta.t * expr * expr
   | ERand of Ta.t
   | ESub of int * dir * expr ref
+  | ECompose of expr * expr
 
 module Input = struct
   type t = Ta.t Env.t * int * Ta.t
@@ -136,6 +137,7 @@ let rec infer env e t () =
       *)
   | ESub (uid,dir,e) -> infer_sub env uid dir !e t
   | ELet (x,e1,e2) -> infer_let env x e1 e2 Ta.any t ()
+  | ECompose (e1,e2) -> infer env e1 (infer env e2 t ()) ()
 
 and infer_sub env uid dir e t =
  let i = (env,uid,t) in
@@ -205,8 +207,10 @@ let rec eval env e v =
 	else eval env e2 v
     | ERand t -> Ta.sample t
     | ESub (_,dir,{ contents = e }) ->
-	match v with
-	  | Ta.Eps -> Ta.Eps
-	  | Ta.Elt (i,v1,v2) -> eval env e (if dir = Fst then v1 else v2)
+	(match v with
+	   | Ta.Eps -> Ta.Eps
+	   | Ta.Elt (i,v1,v2) -> eval env e (if dir = Fst then v1 else v2))
+    | ECompose (e1,e2) ->
+	eval env e2 (eval env e1 v)
 
 let eval = eval Pt.Map.empty

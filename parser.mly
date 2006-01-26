@@ -1,6 +1,6 @@
 %token TYPE EXPR
 %token<string> UIDENT LIDENT TAG
-%token EQUAL COMMA COLON ARROW
+%token EQUAL COMMA COLON ARROW SEMICOLON
 %token EOF LBRACKET RBRACKET UNDERSCORE
 %token<int> INT
 %token LPAREN RPAREN LET IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL
@@ -53,6 +53,7 @@ expr:
  | UNDERSCORE LBRACKET expr_opt RBRACKET expr_rest { Syntax.Expr.CopyTag ($3,$5) }
  | RAND LPAREN typ RPAREN { Syntax.Expr.Random $3 }
  | LPAREN RPAREN { Syntax.Expr.Eps }
+ | LPAREN expr SEMICOLON expr RPAREN { Syntax.Expr.Compose ($2,$4) }
 
 expr_opt:
  | expr { $1 }

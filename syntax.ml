@@ -20,6 +20,7 @@ module Expr = struct
     | Eps
     | Elt of string * t * t
     | CopyTag of t * t
+    | Compose of t * t
 end
 
 module Phrase = struct
@@ -100,6 +101,7 @@ let parse prog =
     | Expr.Cond (e,t,e1,e2) ->
 	Mtt.ECond (parse_expr g e, parse_type [] t,
 		   parse_expr g e1, parse_expr g e2)
+    | Expr.Compose (e1,e2) -> Mtt.ECompose (parse_expr g e1, parse_expr g e2)
   and parse_expr_node e =
     try Hashtbl.find expr_nodes e
     with Not_found ->

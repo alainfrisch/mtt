@@ -44,3 +44,6 @@ expr AppHtml =
 check AppHtml: Input -> Xhtml
 
 (* eval AppHtml doc[ preface[header[],p[]] ] *)
+
+
+eval (let x = b[] in x; x[Copy],y[Copy]) a[]

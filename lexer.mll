@@ -43,6 +43,7 @@ rule token = parse
   | "["  { LBRACKET }
   | "]"  { RBRACKET }
   | "_"  { UNDERSCORE }
+  | ";"  { SEMICOLON }
   | eof { EOF }
 
 and comment depth = parse
