@@ -1,54 +1,46 @@
-type Input = (`doc,(Preface,Blocs))
-type Blocs = 0 | (Div|P|Note,Blocs)
-type Preface = (`preface,((`header,0),Paras))
-type Div = (`div,Blocs)
-type Paras = 0 | (P,Paras)
-type P = (`p,0)
-type Note = (`note,Paras)
+type Input = doc[preface[header[],Paras],Blocs]
+type Blocs = () | div[Blocs],Blocs | p[],Blocs | note[Paras],Blocs
+type Paras = () | p[],Paras
 
-type Xhtml = (`html,(Head,(Body,0)))
-type Head = (`head,T1)
-type T1 = T2 | (Meta,T1)
-type T2 = (Title,T3)
-type T3 = 0 | (Meta,T3)
-type Meta = (`meta,0)
-type Title = (`title,0)
-type Body = (`body,Blocks)
+type Xhtml = html[head[T1],body[Blocks]]
+type T1 = meta[],T1 | title[],T2
+type T2 = () | meta[],T2
+type Blocks = () 
+  | h1[],Blocks
+  | h2[],Blocks
+  | h3[],Blocks
+  | h4[],Blocks
+  | h5[],Blocks
+  | h6[],Blocks
+  | h7[],Blocks
+  | h8[],Blocks
+  | h9[],Blocks
+  | p[],Blocks
+  | b[],Blocks
+  | div[Blocks],Blocks
 
-type Blocks = 0 | (Block,Blocks)
-(*type Block = (`h1|`h2|`h3|`h4|`h5|`h6|`h7|`h8|`h9|`p|`b,0) | (`div,Blocks)*)
-type Block = 
-  (`h1,0) | (`h2,0) | (`h3,0) | (`h4,0) | (`h5,0) 
-| (`h6,0) | (`h7,0) | (`h8,0) | (`h9,0) | (`p,0) 
-| (`b,0) | (`div,Blocks) 
-
-expr BodyHtml =
-  if <Copy in `preface | `note then rest
-  else ((<Copy, let rest = 0 in >BodyHtmlStar),rest)
-
-expr BodyHtmlStar =
-  if Copy in Atom then rest
-  else let rest = >BodyHtmlStar in <BodyHtml
+expr Body =
+  if Copy in () then rest
+  else if Copy in preface[Any],Any | note[Any],Any then >Body
+  else _[let rest=() in <Body],>Body
 
 expr Rest2 =
-  if <Copy in `header then ((`h3,>Copy),rest)
-  else (Copy,rest)
-
-expr Rest2Star =
-  if Copy in Atom then rest
-  else let rest = >Rest2Star in <Rest2  
+  if Copy in () then rest
+  else let rest = >Rest2 in
+  if Copy in header[Any],Any then h3[<Copy],rest
+  else _[<Copy],rest
 
 expr RestHtml =
-  if <Copy in `preface | `note then >Rest2Star
-  else >RestHtmlStar
-
-expr RestHtmlStar =
-  if Copy in Atom then rest
-  else let rest = >RestHtmlStar in <RestHtml
+  if Copy in () then rest
+  else let rest = >RestHtml in 
+  if Copy in preface[Any],Any | note[Any],Any then <Rest2
+  else <RestHtml
 
 expr AppHtml =
-  let rest = 0 in
-  let rest = ((`div,((`h2,0),>RestHtmlStar)),0) in
-  `html[ `head[`title[]], (`body,>BodyHtmlStar)]
+  let rest = () in
+  let rest = div[ h2[], <RestHtml ] in
+  html[ head[title[]], body[<Body]]
 
 check AppHtml: Input -> Xhtml
+
+(* eval AppHtml doc[ preface[header[],p[]] ] *)
