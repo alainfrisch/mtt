@@ -436,35 +436,37 @@ let dump_tr l ppf = function
   | Fst x -> l := x::!l; Format.fprintf ppf "L%i" x.uid
   | Snd x -> l := x::!l; Format.fprintf ppf "R%i" x.uid
 
+let print_tag ppf i = 
+  try 
+    let s = Hashtbl.find rev_tags i in
+    Format.fprintf ppf "%s" s
+  with Not_found -> Format.fprintf ppf "%i" i
+
 let print ppf t =
   let l = ref [t] in
   let p = ref [] in
-  let rec loop () =
-    match !l with
-      | [] -> ()
-      | t::rest ->
-	  l := rest;
-	  if List.memq t !p then ()
-	  else (
-	    p := t :: !p;
-	    if t.undef then Format.fprintf ppf "%i:=UNDEF@." t.uid
-	    else
-(*	    if is_empty t then Format.fprintf ppf "%i:=Empty@." t.uid
-	    else if is_equal t any then Format.fprintf ppf "%i:=Any@." t.uid
-	    else if is_equal t any_atom then 
-	      Format.fprintf ppf "%i:=AnyAtom@." t.uid
-	    else if is_equal t any_pair then 
-	      Format.fprintf ppf "%i:=AnyPair@." t.uid
-	    else   *)
-	      Format.fprintf ppf "%i:=%s_[%a]+...@." t.uid
-		(if t.eps then "() |" else "")
-		(Trans.print_formula (dump_tr l)) (Trans.formula t.def)
-		(* TODO: t.trans ... *)
-(*		(Trans.dump_dnf (dump_tr l)) t.trans *)
-(*	      (Trans.dump (dump_tr l)) t.trans   *)
-	  );
-	  flush stdout;
-	  loop ()
+  let rec loop () = match !l with [] -> () | t::rest ->
+    l := rest;
+    if List.memq t !p then ()
+    else (
+      p := t :: !p;
+      if t.undef then Format.fprintf ppf "%i:=UNDEF@." t.uid else (
+	Format.fprintf ppf "%i:=%s" t.uid
+	  (if t.eps then "() | " else "");
+	if not (Trans.is_zero t.def) then
+	  Format.fprintf ppf "*[%a]"
+	    (Trans.print_formula (dump_tr l)) (Trans.formula t.def);
+	Pt.Map.iter
+	  (fun i f ->
+	     if not (Trans.is_zero f) then
+	       Format.fprintf ppf " | %a[%a]" 
+		 print_tag i 
+		 (Trans.print_formula (dump_tr l)) (Trans.formula f)
+	  )
+	  t.trans;
+	Format.fprintf ppf "@."
+      ));
+    loop ()
   in
   loop ()
 
@@ -539,16 +541,19 @@ let rec normalize2 t =
     t'
 *)
 
-let print_tag ppf i = 
-  try 
-    let s = Hashtbl.find rev_tags i in
-    Format.fprintf ppf "%s" s
-  with Not_found -> Format.fprintf ppf "%i" i
 
 let rec print_v ppf = function
   | Elt (i,v1,v2) -> 
-      Format.fprintf ppf "%a[%a],%a" print_tag i print_v v1 print_v v2
+      Format.fprintf ppf "%a[%a]%a" 
+	print_tag i print_v_content v1 print_v_rest v2
   | Eps -> Format.fprintf ppf "()"
+and print_v_content ppf = function
+  | Eps -> ()
+  | x -> Format.fprintf ppf "%a" print_v x
+and print_v_rest ppf = function
+  | Eps -> ()
+  | x -> Format.fprintf ppf ",%a" print_v x
+
 
 let elt i t1 t2 =
   inter (tag i) (inter (fst t1) (snd t2))
@@ -556,3 +561,19 @@ let elt i t1 t2 =
 let rec singleton = function
   | Eps -> eps
   | Elt (i,v1,v2) -> elt i (singleton v1) (singleton v2)
+
+let is_defined t =
+  let seen = ref Pt.Set.empty in
+  let rec check_tr tr =
+    let id = Trans.uid tr in 
+    if not (Pt.Set.mem id !seen) then
+      let () = seen := Pt.Set.add id !seen in
+      Trans.iter
+	(function Fst x | Snd x -> if x.undef then raise Exit; check_t x)
+	tr
+  and check_t x =
+    check_tr x.def;
+    Pt.Map.iter (fun _ tr -> check_tr tr) x.trans
+  in
+  try check_t t; true
+  with Not_found -> false

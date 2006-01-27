@@ -66,7 +66,8 @@ module type S = sig
     (unit -> unit) -> t -> unit
 
   val check_var: (var -> bool) -> t -> bool
-    
+
+  val iter: (var -> unit) -> t -> unit
 end
 
 module Make(X : HashedOrdered) : S with type var = X.t = struct
@@ -309,6 +310,8 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
   let rec formula = function
     | Zero -> False
     | One -> True
+    | Var (x,One,Zero,_,_) -> PVar x
+    | Var (x,Zero,One,_,_) -> NVar x
     | Var (x,p,Zero,_,_) -> And (PVar x, formula p)
     | Var (x,Zero,n,_,_) -> And (NVar x, formula n)
     | Var (x,One,n,_,_) -> Or (PVar x, formula n)
@@ -320,15 +323,22 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
 	then Or (formula n, And (PVar x, formula (simpl p (~~~ n))))
 	else Or (And (PVar x, formula p), And (NVar x, formula n))
 
-  let rec print_formula f ppf = function
+  let rec print_formula pri f ppf = function
     | False -> Format.fprintf ppf "0"
     | True -> Format.fprintf ppf "1"
     | PVar x -> f ppf x
     | NVar x -> Format.fprintf ppf "~%a" f x
     | Or (f1,f2) -> 
-	Format.fprintf ppf "(%a|%a)" (print_formula f) f1 (print_formula f) f2
+	if pri = 1 then Format.fprintf ppf "(";
+	Format.fprintf ppf "%a|%a" 
+	  (print_formula 0 f) f1 (print_formula 0 f) f2;
+	if pri = 1 then Format.fprintf ppf ")"
     | And (f1,f2) -> 
-	Format.fprintf ppf "(%a&%a)" (print_formula f) f1 (print_formula f) f2
+	Format.fprintf ppf "%a&%a"
+	  (print_formula 1 f) f1 (print_formula 1 f) f2
+
+  let print_formula = print_formula 0
+
 
   let rec decompose ~pos ~neg one = function
     | Zero -> ()
@@ -412,6 +422,10 @@ module Make(X : HashedOrdered) : S with type var = X.t = struct
   let check_var f = function
     | Var (x,One,Zero,_,_) -> f x
     | _ -> false
+
+  let rec iter f = function
+    | Var (x,p,n,_,_) -> f x; iter f p; iter f n
+    | _ -> ()
 end
 
 

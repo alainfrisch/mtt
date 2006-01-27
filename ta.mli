@@ -34,6 +34,8 @@ val mk: unit -> delayed
 val def: delayed -> t -> unit
 val get_delayed: delayed -> t
 
+val is_defined: t -> bool
+
 (** Emptyness check. *)
 exception Undefined
 val is_empty: t -> bool

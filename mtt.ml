@@ -137,7 +137,11 @@ let rec infer env e t () =
       *)
   | ESub (uid,dir,e) -> infer_sub env uid dir !e t
   | ELet (x,e1,e2) -> infer_let env x e1 e2 Ta.any t ()
-  | ECompose (e1,e2) -> infer env e1 (infer env e2 t ()) ()
+  | ECompose (e1,e2) -> 
+      let t = infer env e2 t () in
+      if Ta.is_defined t 
+      then infer env e1 (infer env e2 t ()) ()
+      else (Printf.eprintf "Ill-founded composition\n"; exit 1)
 
 and infer_sub env uid dir e t =
  let i = (env,uid,t) in
