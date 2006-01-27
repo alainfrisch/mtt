@@ -66,13 +66,13 @@ let parse prog =
     try Hashtbl.find type_nodes e
     with Not_found ->
       let n = Ta.mk () in
-      let t = Ta.get_delayed n in
-      Hashtbl.add type_nodes e t;
+      Hashtbl.add type_nodes e n;
       Ta.def n (parse_type [] e);
-      t in
+      n in
 
   let expr_nodes = Hashtbl.create 256 in
   let expr_id = ref 0 in
+  let composes = ref [] in
 
   let ex d = incr expr_id; { Mtt.uid = !expr_id; Mtt.descr = d } in
   let ecopy = ex Mtt.ECopy in
@@ -104,8 +104,11 @@ let parse prog =
     | Expr.Cond (e,t,e1,e2) ->
 	ex (Mtt.ECond (parse_expr g e, parse_type [] t,
 		       parse_expr g e1, parse_expr g e2))
-    | Expr.Compose (e1,e2) -> 
-	ex (Mtt.ECompose (parse_expr g e1, parse_expr g e2))
+    | Expr.Compose (e1,e2) ->
+	let r = ex (Mtt.ECompose (parse_expr g e1, parse_expr g e2)) in
+	composes := r :: !composes;
+	r
+
   and parse_expr_node e =
     try Hashtbl.find expr_nodes e
     with Not_found ->
@@ -134,12 +137,17 @@ let parse prog =
        | Phrase.Infer (e,t) -> cmds := `Infer (e,t) :: !cmds
        | Phrase.Check (e,t1,t2) -> cmds := `Check (e,t1,t2) :: !cmds
        | Phrase.Eval (e1,e2) -> cmds := `Eval (e1,e2) :: !cmds) prog;
-  List.rev_map 
-    (function
-       | `Infer (e,t) -> 
-	   `Infer (parse_expr [] e, parse_type [] t)
-       | `Check (e,t1,t2) -> 
-	   `Check (parse_expr [] e, parse_type [] t1, parse_type [] t2)
-       | `Eval (e1,e2) ->
-	   `Eval (parse_expr [] e1, parse_val e2)
-    ) !cmds
+  let p = 
+    List.rev_map 
+      (function
+	 | `Infer (e,t) -> 
+	     `Infer (parse_expr [] e, parse_type [] t)
+	 | `Check (e,t1,t2) -> 
+	     `Check (parse_expr [] e, parse_type [] t1, parse_type [] t2)
+	 | `Eval (e1,e2) ->
+	     `Eval (parse_expr [] e1, parse_val e2)
+      ) !cmds in
+  List.iter
+    Mtt.check_compose
+    !composes;
+  p

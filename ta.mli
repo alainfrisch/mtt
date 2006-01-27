@@ -18,10 +18,11 @@ val neg: t -> t
 val is_trivially_empty: t -> bool
 val is_trivially_any: t -> bool
 
+type node
 val eps: t
-val fst: t -> t  (** Any pair whose first component is as given. *)
-val snd: t -> t  (** Any pair whose second component is as given. *)
-val elt: atom -> t -> t -> t
+val fst: node -> t  (** Any pair whose first component is as given. *)
+val snd: node -> t  (** Any pair whose second component is as given. *)
+val elt: atom -> node -> node -> t
 val tag: atom -> t
 val nottag: atom -> t
 val noneps: t
@@ -29,10 +30,9 @@ val tag_in: Pt.Set.t -> t
 val tag_not_in: Pt.Set.t -> t
 
 (** Delayed creation. *)
-type delayed
-val mk: unit -> delayed
-val def: delayed -> t -> unit
-val get_delayed: delayed -> t
+val mk: unit -> node
+val def: node -> t -> unit
+val get: node -> t
 
 val is_defined: t -> bool
 

@@ -94,11 +94,7 @@ and infer_descr env uid e t =
     | EElt (i,e1,e2) -> infer_elt env i e1 e2 t
     | ESub (dir,e) -> infer_sub env uid dir e t
     | ELet (x,e1,e2) -> infer_let env x e1 e2 Ta.any t ()
-    | ECompose (e1,e2) -> 
-	let t = infer env e2 t () in
-	if Ta.is_defined t 
-	then infer env e1 (infer env e2 t ()) ()
-	else (Printf.eprintf "Ill-founded composition\n"; exit 1)
+    | ECompose (e1,e2) -> infer env e1 (infer env e2 t ()) ()
 
 and infer_elt_aux b env e1 e2 = 
   List.fold_left
@@ -138,13 +134,12 @@ and infer_cond env e t' e1 e2 t =
     () 
 
 and infer_sub env idx dir e t =
-  let d = Ta.mk () in
-  let r =
-    (match dir with Fst -> Ta.fst | Snd -> Ta.snd) (Ta.get_delayed d) in
+  let n = Ta.mk () in
+  let r = (match dir with Fst -> Ta.fst | Snd -> Ta.snd) n in
   let r = if Ta.is_in Ta.Eps t then Ta.union r Ta.eps else r in
   Memo.replace infer_memo idx (Type r);
   let dt = infer env e t () in
-  Ta.def d dt;
+  Ta.def n dt;
   if is_any dt then
     if Ta.is_in Ta.Eps t then Ta.any else Ta.noneps
   else if is_empty dt then
@@ -189,3 +184,29 @@ let rec eval env e v =
 	eval env e2 (eval env e1 v)
 
 let eval = eval Pt.Map.empty
+
+
+let check_compose e =
+  let seen = ref Pt.Set.empty in
+  let rec aux e' =
+    if e' == e then raise Exit;
+    if Pt.Set.mem e'.uid !seen then ()
+    else (seen := Pt.Set.add e'.uid !seen;
+	  match e'.descr with
+	    | EVal _
+	    | ECopy
+	    | EVar _ 
+	    | ERand _ -> ()
+	    | ECond (e,_,e1,e2) -> aux e; aux e1; aux e2
+	    | ESub (_,e) -> aux e
+	    | EElt (_,e1,e2)
+	    | ECopyTag (e1,e2)
+	    | ELet (_,e1,e2)
+	    | ECompose (e1,e2) -> aux e1; aux e2)
+  in
+  match e.descr with
+    | ECompose (e1,e2) -> 
+	(try aux e2
+	 with Exit ->
+	   Printf.eprintf "Ill-formed composition\n"; exit 1)
+    | _ -> assert false

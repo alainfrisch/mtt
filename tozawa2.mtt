@@ -63,3 +63,7 @@ check AppHtml: Input -> Xhtml
 (* eval (let x = b[] in x; x[Copy],y[Copy]) a[] *)
 
 infer AppHtml in Xhtml
+
+expr X = (Copy ; Copy)
+
+infer X in a[]
