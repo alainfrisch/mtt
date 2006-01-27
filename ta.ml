@@ -442,6 +442,12 @@ let print_tag ppf i =
     Format.fprintf ppf "%s" s
   with Not_found -> Format.fprintf ppf "%i" i
 
+let rec print_tags ppf = function
+  | [i] -> print_tag ppf i
+  | i::l -> Format.fprintf ppf "%a|" print_tag i; print_tags ppf l
+  | [] -> assert false
+  
+
 let print ppf t =
   let l = ref [t] in
   let p = ref [] in
@@ -450,20 +456,41 @@ let print ppf t =
     if List.memq t !p then ()
     else (
       p := t :: !p;
+      let first = ref true in
+      let sep () = 
+	if !first then first := false
+	else Format.fprintf ppf " | ";
+      in
       if t.undef then Format.fprintf ppf "%i:=UNDEF@." t.uid else (
-	Format.fprintf ppf "%i:=%s" t.uid
-	  (if t.eps then "() | " else "");
-	if not (Trans.is_zero t.def) then
+	Format.fprintf ppf "%i:=" t.uid;
+	if t.eps then (sep (); Format.fprintf ppf "()");
+	if not (Trans.is_zero t.def) then (
+	  sep ();
 	  Format.fprintf ppf "*[%a]"
-	    (Trans.print_formula (dump_tr l)) (Trans.formula t.def);
+	    (Trans.print_formula (dump_tr l)) (Trans.formula t.def)
+	);
+	
+	let h = ref Pt.Map.empty in
 	Pt.Map.iter
 	  (fun i f ->
-	     if not (Trans.is_zero f) then
-	       Format.fprintf ppf " | %a[%a]" 
-		 print_tag i 
+	     let id = Trans.uid f in
+	     let l = 
+	       try Pervasives.snd (Pt.Map.find id !h)
+	       with Not_found -> []
+	     in
+	     h := Pt.Map.add id (f,i::l) !h
+	  ) t.trans;
+
+	Pt.Map.iter
+	  (fun _ (f,tags) ->
+	     if not (Trans.is_zero f) then (
+	       sep ();
+	       Format.fprintf ppf "%a[%a]" 
+		 print_tags (List.sort Pervasives.compare tags)
 		 (Trans.print_formula (dump_tr l)) (Trans.formula f)
+	     )
 	  )
-	  t.trans;
+	  !h;
 	Format.fprintf ppf "@."
       ));
     loop ()
