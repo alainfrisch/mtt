@@ -36,16 +36,6 @@ let parse prog =
   let types = Hashtbl.create 256 in
   let exprs = Hashtbl.create 256 in
 
-  let vars = Hashtbl.create 256 in
-  let var_id = ref 0 in
-  
-  let parse_var x =
-    try Hashtbl.find vars x
-    with Not_found ->
-      incr var_id;
-      Hashtbl.add vars x !var_id;
-      !var_id in
-
   let type_nodes = Hashtbl.create 256 in
 
   let rec parse_type g = function
@@ -77,8 +67,10 @@ let parse prog =
   let ex d = incr expr_id; { Mtt.uid = !expr_id; Mtt.descr = d } in
   let ecopy = ex Mtt.ECopy in
   let eeps = ex (Mtt.EVal Ta.Eps) in
+  let eerror = ex (Mtt.EError) in
   let rec parse_expr g = function
     | Expr.Ident "Copy" -> ecopy
+    | Expr.Ident "Error" -> eerror
     | Expr.Ident x when List.mem x g ->
 	Printf.eprintf "Unguarded recursion on expression %s\n" x; exit 1
     | Expr.Ident x when not (Hashtbl.mem exprs x) ->
@@ -89,14 +81,14 @@ let parse prog =
 	ex (Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, parse_expr g e2))
     | Expr.CopyTag (e1,e2) -> 
 	ex (Mtt.ECopyTag (parse_expr g e1, parse_expr g e2))
-    | Expr.Var x -> ex (Mtt.EVar (parse_var x))
+    | Expr.Var x -> ex (Mtt.EVar (Mtt.var_of_string x))
     | Expr.Random t -> 
 	let t = parse_type [] t in
 	if Ta.is_empty t then
 	  (Printf.eprintf "Cannot rand(_) an empty type\n"; exit 1);
 	ex (Mtt.ERand t)
     | Expr.Let (x,e1,e2) -> 
-	ex (Mtt.ELet (parse_var x, parse_expr g e1, parse_expr g e2))
+	ex (Mtt.ELet (Mtt.var_of_string x, parse_expr g e1, parse_expr g e2))
     | Expr.Left e -> 
 	ex (Mtt.ESub (Mtt.Fst, parse_expr_node e))
     | Expr.Right e -> 

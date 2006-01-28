@@ -64,6 +64,8 @@ check AppHtml: Input -> Xhtml
 
 infer AppHtml in Xhtml
 
-expr X = (Copy ; Copy)
+(*expr X = (Copy ; Copy)
 
-infer X in a[]
+infer X in a[]*)
+
+infer <Copy in Any

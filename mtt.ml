@@ -2,6 +2,21 @@ type var = int
 module VarSet = Pt.Set
 module Env = Pt.Map
 
+let vars = Hashtbl.create 256
+let inv_vars = Hashtbl.create 256
+let var_id = ref 0
+
+let var_of_string x =
+  try Hashtbl.find vars x
+  with Not_found ->
+    incr var_id;
+    Hashtbl.add vars x !var_id;
+    Hashtbl.add inv_vars !var_id x;
+    !var_id
+  
+let string_of_var i =
+  Hashtbl.find inv_vars i
+
 type dir = Fst | Snd
 
 type expr = {
@@ -19,6 +34,7 @@ and expr_descr =
   | ERand of Ta.t
   | ESub of dir * expr
   | ECompose of expr * expr
+  | EError
 
 module Input = struct
   type t = Ta.t Env.t * int * Ta.t
@@ -37,25 +53,26 @@ module Memo = Hashtbl.Make(Input)
 let infer_memo = Memo.create 4096
 let infer_stack = ref []
 
-let ppf = Format.std_formatter
-
 let is_empty t =
-(*  Ta.is_trivially_empty t *)
   try Ta.is_empty t
   with Ta.Undefined -> false
 
 let is_any t =
-(*  Ta.is_trivially_any t *)
   try Ta.is_any t
   with Ta.Undefined -> false
 
+let is_noneps t =
+  try Ta.subset t Ta.noneps && Ta.subset Ta.noneps t
+  with Ta.Undefined -> false
+
+
 let union f1 f2 () =
   let t1 = f1 () in
-  if is_any (*is_trivially_any*) t1 then Ta.any else Ta.union t1 (f2 ())
+  if is_any t1 then Ta.any else Ta.union t1 (f2 ())
 
 let inter f1 f2 () =
   let t1 = f1 () in
-  if is_empty (*is_trivially_empty*) t1 then Ta.empty else Ta.inter t1 (f2 ())
+  if is_empty t1 then Ta.empty else Ta.inter t1 (f2 ())
 
 let rec unstack old = function
   | l when l == old -> ()
@@ -69,13 +86,16 @@ let rec unstack old = function
 
 let rec infer env e t () =
   if Ta.is_empty t then Ta.empty
-  else if Ta.is_any t then Ta.any
   else  
     let i = (env,e.uid,t) in
     try match Memo.find infer_memo i with Type t -> t | Exn exn -> raise exn
     with Not_found -> 
       try 
-	let r = infer_descr env i e t in      
+	let r = infer_descr env i e t in 
+	let r = 
+	  if is_empty r then Ta.empty 
+	  else if is_any r then Ta.any
+	  else if is_noneps r then Ta.noneps else r in
 	Memo.replace infer_memo i (Type r);
 	infer_stack := i :: !infer_stack;
 	r
@@ -83,18 +103,19 @@ let rec infer env e t () =
 	Memo.replace infer_memo i (Exn exn);
 	raise exn
 
-and infer_descr env uid e t =
-  match e.descr with
-    | EVal v -> if Ta.is_in v t then Ta.any else Ta.empty
-    | ECopy -> t
-    | EVar x -> infer_var env x t
-    | ERand t' -> if Ta.subset t' t then Ta.any else Ta.empty
-    | ECond (e,t',e1,e2) -> infer_cond env e t' e1 e2 t
-    | ECopyTag (e1,e2) -> infer_copytag env e1 e2 t
-    | EElt (i,e1,e2) -> infer_elt env i e1 e2 t
-    | ESub (dir,e) -> infer_sub env uid dir e t
-    | ELet (x,e1,e2) -> infer_let env x e1 e2 Ta.any t ()
-    | ECompose (e1,e2) -> infer env e1 (infer env e2 t ()) ()
+and infer_descr env uid e t = match e.descr with
+  | EVal v -> if Ta.is_in v t then Ta.any else Ta.empty
+  | ECopy -> t
+  | EVar x -> infer_var env x t
+  | ERand t' -> if Ta.subset t' t then Ta.any else Ta.empty
+  | ECond (e,t',e1,e2) -> infer_cond env e t' e1 e2 t
+  | ECopyTag (e1,e2) -> infer_copytag env e1 e2 t
+  | EElt (i,e1,e2) -> infer_elt env i e1 e2 t
+  | ESub (dir,e) -> infer_sub env uid dir e t
+  | ELet (x,e1,e2) -> 
+      inter (infer env e1 Ta.any) (infer_let env x e1 e2 Ta.any t) ()
+  | ECompose (e1,e2) -> infer env e1 (infer env e2 t ()) ()
+  | EError -> Ta.empty
 
 and infer_elt_aux b env e1 e2 = 
   List.fold_left
@@ -107,11 +128,16 @@ and infer_elt_aux b env e1 e2 =
        if Ta.is_trivially_empty accu then raise Exit else accu)
     
 and infer_elt env i e1 e2 t =
-  try infer_elt_aux Ta.empty env e1 e2 Ta.any (Ta.dnf_neg_pair i t)
+  let accu = inter (infer env e1 Ta.any) (infer env e2 Ta.any) () in
+  try infer_elt_aux Ta.empty env e1 e2 accu (Ta.dnf_neg_pair i t)
   with Exit -> Ta.empty
     
 and infer_copytag env e1 e2 t =
-  let accu = if Ta.is_in Ta.Eps t then Ta.any else Ta.noneps in
+  let accu = 
+    inter 
+      (inter (fun () -> Ta.noneps) (infer env e1 Ta.any))
+      (infer env e2 Ta.any)
+      () in
   let dom,tr_def,tr = Ta.dnf_neg_all t in
   try
     let accu = infer_elt_aux (Ta.tag_in dom) env e1 e2 accu tr_def in
@@ -122,30 +148,25 @@ and infer_copytag env e1 e2 t =
 and infer_var env x t =
   let tx = 
     try Env.find x env
-    with Not_found -> Printf.eprintf "Unbound variable %i\n" x; exit 1 in
+    with Not_found -> 
+      Printf.eprintf "Unbound variable %s\n" (string_of_var x); exit 1 in
   if Ta.subset tx t then Ta.any
   else if Ta.disjoint t tx then Ta.empty
   else raise (Refine (x,t))
 
 and infer_cond env e t' e1 e2 t =
-  inter 
-    (union (infer env e t') (infer env e2 t))
-    (union (infer env e (Ta.neg t')) (infer env e1 t))
+  inter (infer env e Ta.any)
+    (inter 
+       (union (infer env e t') (infer env e2 t))
+       (union (infer env e (Ta.neg t')) (infer env e1 t)))
     () 
 
 and infer_sub env idx dir e t =
   let n = Ta.mk () in
-  let r = (match dir with Fst -> Ta.fst | Snd -> Ta.snd) n in
-  let r = if Ta.is_in Ta.Eps t then Ta.union r Ta.eps else r in
+  let r = match dir with Fst -> Ta.fst n | Snd -> Ta.snd n in
   Memo.replace infer_memo idx (Type r);
-  let dt = infer env e t () in
-  Ta.def n dt;
-  if is_any dt then
-    if Ta.is_in Ta.Eps t then Ta.any else Ta.noneps
-  else if is_empty dt then
-    if Ta.is_in Ta.Eps t then Ta.eps else Ta.empty
-  else r
-
+  Ta.def n (infer env e t ());
+  r
 
 and infer_let env x e1 e2 dom t () =
   let old_stack = !infer_stack in
@@ -161,28 +182,31 @@ and infer_let env x e1 e2 dom t () =
 	  ()
     | Exn exn -> raise exn
 
-let rec eval env e v =
-  match e.descr with
-    | EVal v' -> v'
-    | EElt (i,e1,e2) -> Ta.Elt (i,eval env e1 v, eval env e2 v)
-    | ECopyTag (e1,e2) ->
-	(match v with
-	   | Ta.Eps -> Ta.Eps
-	   | Ta.Elt (i,_,_) -> Ta.Elt (i, eval env e1 v, eval env e2 v))
-    | ECopy -> v
-    | EVar x -> Pt.Map.find x env
-    | ELet (x,e1,e2) -> eval (Pt.Map.add x (eval env e1 v) env) e2 v
-    | ECond (e,t,e1,e2) ->
-	if Ta.is_in (eval env e v) t then eval env e1 v
-	else eval env e2 v
-    | ERand t -> Ta.sample t
-    | ESub (dir,e) ->
-	(match v with
-	   | Ta.Eps -> Ta.Eps
-	   | Ta.Elt (i,v1,v2) -> eval env e (if dir = Fst then v1 else v2))
-    | ECompose (e1,e2) ->
-	eval env e2 (eval env e1 v)
+exception Error
 
+let rec eval env e v = match e.descr with
+  | EVal v' -> v'
+  | EElt (i,e1,e2) -> Ta.Elt (i,eval env e1 v, eval env e2 v)
+  | ECopyTag (e1,e2) ->
+      (match v with
+	 | Ta.Eps -> raise Error
+	 | Ta.Elt (i,_,_) -> Ta.Elt (i, eval env e1 v, eval env e2 v))
+  | ECopy -> v
+  | EVar x -> 
+      (try Pt.Map.find x env
+       with Not_found ->
+	 raise Error)
+  | ELet (x,e1,e2) -> eval (Pt.Map.add x (eval env e1 v) env) e2 v
+  | ECond (e,t,e1,e2) ->
+      eval env (if Ta.is_in (eval env e v) t then e1 else e2) v
+  | ERand t -> Ta.sample t
+  | ESub (dir,e) ->
+      (match v with
+	 | Ta.Eps -> raise Error
+	 | Ta.Elt (i,v1,v2) -> eval env e (if dir = Fst then v1 else v2))
+  | ECompose (e1,e2) -> eval env e2 (eval env e1 v)
+  | EError -> raise Error
+	
 let eval = eval Pt.Map.empty
 
 
@@ -196,7 +220,8 @@ let check_compose e =
 	    | EVal _
 	    | ECopy
 	    | EVar _ 
-	    | ERand _ -> ()
+	    | ERand _ 
+	    | EError -> ()
 	    | ECond (e,_,e1,e2) -> aux e; aux e1; aux e2
 	    | ESub (_,e) -> aux e
 	    | EElt (_,e1,e2)

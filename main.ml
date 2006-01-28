@@ -6,30 +6,25 @@ let parse () =
     failwith (Format.sprintf "Syntax error at char %i" i)
 
 let eval ppf (e,v) = 
-  Format.fprintf ppf "possible output:%a@." Ta.print_v (Mtt.eval e v)
+   Format.fprintf ppf "possible output:";
+  try
+    let v' = Mtt.eval e v in
+    Format.fprintf ppf "%a@." Ta.print_v v';
+  with Mtt.Error ->
+    Format.fprintf ppf "Error@."
 
 let infer ppf (e,t) = 
   let s = Mtt.infer Mtt.Env.empty e t () in
-  Printf.eprintf "Inferred\n"; flush stderr;
-(*  let s = Ta.normalize s in  *)
-(*  let s = Ta.normalize2 s in
-  Printf.eprintf "Normalized\n"; flush stderr; *)
   Format.fprintf ppf "inferred input:%a@." Ta.print s 
 
 let check ppf (e,t1,t2) = 
   let s = Mtt.infer Mtt.Env.empty e t2 () in
   Format.fprintf ppf "Inferred@.";
-(*  Format.fprintf ppf "%a@." Ta.print (Ta.normalize s); *)
-(*  Format.fprintf ppf "Sample:%a@." Ta.print_v (Ta.sample s); *)
-  if Ta.subset t1 s then 
-    Format.fprintf ppf "check passed.@."
-  else (
-    Format.fprintf ppf "check failed, looking for sample...@."; flush stderr;
-    try
-      let v = Ta.sample (Ta.diff t1 s) in
-      Format.fprintf ppf "%a@." Ta.print_v v;
-      Format.fprintf ppf "possible output:%a@." Ta.print_v (Mtt.eval e v)
-    with Not_found -> assert false)
+  try
+    let v = Ta.sample (Ta.diff t1 s) in
+    Format.fprintf ppf "check failed. Invalid input:%a@." Ta.print_v v;
+    eval ppf (e,v)
+  with Not_found -> Format.fprintf ppf "check passed.@."
 
 let ppf = Format.std_formatter
 
