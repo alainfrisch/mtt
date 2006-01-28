@@ -42,24 +42,16 @@ val is_empty: t -> bool
 val is_any: t -> bool
 val subset: t -> t -> bool
 val disjoint: t -> t -> bool
+val is_equal: t -> t -> bool
 
 type v = Eps | Elt of atom * v * v
 val is_in: v -> t -> bool
-
-(*
-val dnf_pair: t -> (t * t) list
-*)
 
 val dnf_neg_pair: atom -> t -> (t * t) list
 val dnf_neg_all: t -> Pt.Set.t * (t * t) list * (atom * (t * t) list) list
 
 
 val print: Format.formatter -> t -> unit
-
-(*
-val normalize: t -> t
-val normalize2: t -> t
-*)
 
 val sample: t -> v
 val print_v:  Format.formatter -> v -> unit

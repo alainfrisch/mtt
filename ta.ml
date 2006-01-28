@@ -55,12 +55,6 @@ struct
     | Snd n1, Snd n2 -> n1.uid - n2.uid
     | Fst _, Snd _ -> -1
     | Snd _, Fst _ -> 1 
-(*  let compare x y = match x,y with
-    | (Fst n1 | Snd n1), (Fst n2 | Snd n2) ->
-	if n1 == n2 then match x,y with
-	  | Fst _, Fst _ | Snd _, Snd _ -> 0
-	  | Fst _, Snd _ -> 1 | _ -> -1
-	else n2.uid - n1.uid  *)
 end
 
 include Descr
@@ -114,21 +108,7 @@ let neg t =
 let is_trivially_empty t = 
   not t.eps && Trans.is_zero t.def && Pt.Map.is_empty t.trans
 let is_trivially_any t = 
-  t.eps && Trans.is_one t.def
-
-(*
-let dnf_trans =
-  Trans.dnf_enum
-    (fun x accu -> x :: accu)
-    ~pos:(fun x (fst,snd) -> match x with
-	    | Fst t ->  inter fst t, snd
-	    | Snd t -> fst, inter snd t)
-    ~neg:(fun x (fst,snd) -> match x with
-	    | Fst t -> diff fst t, snd
-	    | Snd t -> fst, diff snd t)
-    [] (any,any)
-*)
-
+  t.eps && Trans.is_one t.def && Pt.Map.is_empty t.trans
 
 type v = Eps | Elt of int * v * v
 
@@ -177,7 +157,6 @@ let guard a f n = match a with
 module THash = Hashtbl.Make(Descr)
 let memo = THash.create 8191
 let marks = ref []
-let count = ref 0
 
 let rec slot (t : Descr.t) =
   if t.eps then slot_eps 
@@ -185,14 +164,6 @@ let rec slot (t : Descr.t) =
   else
     try THash.find memo t
     with Not_found ->
-      incr count;
-(*      if (!count mod 1000 = 0) then (print_char '.'; flush stdout); *)
-(*      if !count > 80 then
-	Format.fprintf Format.std_formatter "[%i]=>%a@." !count
-	  (Trans.print_formula (fun ppf -> function
-				  | Fst x -> Format.fprintf ppf "L%i" x.uid
-				  | Snd x -> Format.fprintf ppf "R%i" x.uid))
-	  (Trans.formula tr); *)
       let s = { org = t; status = Maybe; active = false; notify = Nothing;
 		unknown = false
 	      } in
@@ -273,6 +244,30 @@ let sample t =
 
 let non_empty t = not (is_empty t)
 
+let subset t1 t2 = is_empty (diff t1 t2)
+let disjoint t1 t2 = is_empty (inter t1 t2)
+
+let is_equal t1 t2 = subset t1 t2 && subset t2 t1
+
+let fst n = 
+  if not (n.undef) && (is_trivially_any (get n)) then noneps
+  else typ false Pt.Map.empty (Trans.(!!!) (Fst n))
+let snd n =
+  if not (n.undef) && (is_trivially_any (get n)) then noneps
+  else typ false Pt.Map.empty (Trans.(!!!) (Snd n))
+let tag i = 
+  typ false (Pt.Map.singleton i Trans.one) Trans.zero
+let tag_in ts =
+  typ false (Pt.Map.constant ts Trans.one) Trans.zero
+let tag_not_in ts =
+  typ false (Pt.Map.constant ts Trans.zero) Trans.one
+let nottag i = 
+  typ false (Pt.Map.singleton i Trans.zero) Trans.one
+
+let get_trans t i =
+  try Pt.Map.find i t.trans
+  with Not_found -> t.def
+
 let dnf_trans t =
   let res = ref [] in
   let rec aux accu1 accu2 t =
@@ -300,44 +295,6 @@ let dnf_trans t =
   in
   aux any any t;
   !res
-
-
-
-(*
-let is_empty t =
-  Printf.eprintf "+"; flush stderr;
-  let r = is_empty t in
-  Printf.eprintf "-"; flush stderr;
-  r
-*)
-
-let subset t1 t2 = is_empty (diff t1 t2)
-let disjoint t1 t2 = is_empty (inter t1 t2)
-
-let is_equal t1 t2 = subset t1 t2 && subset t2 t1
-
-let fst n = 
-  if not (n.undef) && (is_trivially_any (get n)) then noneps
-  else typ false Pt.Map.empty (Trans.(!!!) (Fst n))
-let snd n =
-  if not (n.undef) && (is_trivially_any (get n)) then noneps
-  else typ false Pt.Map.empty (Trans.(!!!) (Snd n))
-let tag i = 
-  typ false (Pt.Map.singleton i Trans.one) Trans.zero
-let tag_in ts =
-  typ false (Pt.Map.constant ts Trans.one) Trans.zero
-let tag_not_in ts =
-  typ false (Pt.Map.constant ts Trans.zero) Trans.one
-let nottag i = 
-  typ false (Pt.Map.singleton i Trans.zero) Trans.one
-
-(*
-let dnf_pair t = dnf_trans t.trans
-*)
-
-let get_trans t i =
-  try Pt.Map.find i t.trans
-  with Not_found -> t.def
 
 let dnf_neg_pair i t = dnf_trans (Trans.(~~~) (get_trans t i))
 
@@ -379,11 +336,6 @@ let print ppf t =
     let first = ref true in
     let sep () = if !first then first := false else Format.fprintf ppf " | " in
     if t.eps then (sep (); Format.fprintf ppf "()");
-    if not (Trans.is_zero t.def) then (
-      sep ();
-      Format.fprintf ppf "*[%a]"
-	(Trans.print_formula (dump_tr l)) (Trans.formula t.def)
-    );
     
     let h = ref Pt.Map.empty in
     Pt.Map.iter
@@ -405,17 +357,22 @@ let print ppf t =
 	     (Trans.print_formula (dump_tr l)) (Trans.formula f)
 	 )
       )
-      !h
+      !h;
+
+    if not (Trans.is_zero t.def) then (
+      sep ();
+      Format.fprintf ppf "*[%a]" 
+	(Trans.print_formula (dump_tr l)) (Trans.formula t.def)
+    )
   and loop () = match !l with [] -> () | t::rest ->
     l := rest;
     if List.memq t !p then ()
     else (
       p := t :: !p;
-      if t.undef then Format.fprintf ppf "%i:=UNDEF@." t.uid else (
-	Format.fprintf ppf "%i:=" t.uid;
-	descr (get t);
-	Format.fprintf ppf "@."
-      ));
+      Format.fprintf ppf "%i:=" t.uid;
+      if t.undef then Format.fprintf ppf "UNDEF" else descr (get t);
+      Format.fprintf ppf "@."
+    );
     loop ()
   in
   descr t;
@@ -423,7 +380,7 @@ let print ppf t =
   loop ()
 
 
-
+(*
 let normalize_dnf l =
   let rec add accu t1 t2 = function
     | [] -> (t1,t2) :: accu
@@ -439,10 +396,7 @@ let normalize_dnf l =
 	  else add accu t1 t2 rest
   in
   List.fold_left (fun accu (t1,t2) -> add [] t1 t2 accu) [] l
-	    
-    
 
-(*
 module Memo = Hashtbl.Make(Node)
 
 let normalize_memo = Memo.create 4096

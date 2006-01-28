@@ -21,51 +21,39 @@ type Blocks = ()
 
 expr Rest2 =
   if Copy in () then rest
-  else let rest = >Rest2 in
-  if Copy in header[Any],Any then h3[<Copy],rest
-  else _[<Copy],rest
+  else let rest = !Rest2 in
+  if Copy in header[Any],Any then h3[/Copy],rest
+  else _[/Copy],rest
 
 expr RestHtml =
   if Copy in () then rest
-  else let rest = >RestHtml in 
-  if Copy in preface[Any],Any | note[Any],Any then <Rest2
-  else <RestHtml
+  else let rest = !RestHtml in 
+  if Copy in preface[Any],Any | note[Any],Any then /Rest2
+  else /RestHtml
 
 (*
 expr Body =
   if Copy in () then rest
-  else if Copy in preface[Any],Any | note[Any],Any then >Body
-  else _[let rest=() in <Body],>Body
+  else if Copy in preface[Any],Any | note[Any],Any then !Body
+  else _[let rest=() in /Body],!Body
 
 expr AppHtml =
   let rest = () in
-  let rest = div[ h2[], <RestHtml ] in
-  html[ head[title[]], body[<Body]]
+  let rest = div[ h2[], /RestHtml ] in
+  html[ head[title[]], body[/Body]]
   *)
 
 expr Body = 
   if Copy in () then ()
-  else if Copy in preface[Any],Any | note[Any],Any then >Body
-  else _[<Body],>Body
+  else if Copy in preface[Any],Any | note[Any],Any then !Body
+  else _[/Body],!Body
 
-expr Append = if Copy in () then rest else _[<Copy],>Append
+expr Append = if Copy in () then rest else _[/Copy],!Append
 
 expr AppHtml =
   html[ head[title[]], body[
-       let rest = div[ h2[], let rest = () in <RestHtml] in
-       (<Body; Append) ] ]
+       let rest = div[ h2[], let rest = () in /RestHtml] in
+       (/Body; Append) ] ]
 
 check AppHtml: Input -> Xhtml
 
-(* eval AppHtml doc[ preface[header[],p[]] ] *)
-
-
-(* eval (let x = b[] in x; x[Copy],y[Copy]) a[] *)
-
-infer AppHtml in Xhtml
-
-(*expr X = (Copy ; Copy)
-
-infer X in a[]*)
-
-infer <Copy in Any

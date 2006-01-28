@@ -62,7 +62,7 @@ let is_any t =
   with Ta.Undefined -> false
 
 let is_noneps t =
-  try Ta.subset t Ta.noneps && Ta.subset Ta.noneps t
+  try Ta.is_equal t Ta.noneps
   with Ta.Undefined -> false
 
 

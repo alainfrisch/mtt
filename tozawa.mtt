@@ -8,23 +8,23 @@ type T2 = div[T2],T2 | p[],T2 | ()
 
 expr Body =
   if Copy in () then rest
-  else if Copy in preface[Any],Any | note[Any],Any then >Body
-  else _[let rest = () in <Body], >Body
+  else if Copy in preface[Any],Any | note[Any],Any then !Body
+  else _[let rest = () in /Body], !Body
 
 expr Prepend =
   if Copy in () then rest
-  else _[<Copy],>Prepend
+  else _[/Copy],!Prepend
 
 expr Rest =
   if Copy in () then rest
-  else let rest = >Rest in
-  if Copy in preface[Any],Any | note[Any],Any then <Prepend
+  else let rest = !Rest in
+  if Copy in preface[Any],Any | note[Any],Any then /Prepend
   else rest
 
 expr Appendix =
   let rest = () in
-  let rest = appendix[<Rest] in
-  doc[<Body]
+  let rest = appendix[/Rest] in
+  doc[/Body]
 
 eval Appendix doc[ preface[ header[p3[]] ], p1[], p2[], note[ z[]]  ]
 

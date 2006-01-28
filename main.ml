@@ -19,7 +19,6 @@ let infer ppf (e,t) =
 
 let check ppf (e,t1,t2) = 
   let s = Mtt.infer Mtt.Env.empty e t2 () in
-  Format.fprintf ppf "Inferred@.";
   try
     let v = Ta.sample (Ta.diff t1 s) in
     Format.fprintf ppf "check failed. Invalid input:%a@." Ta.print_v v;
