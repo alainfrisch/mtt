@@ -1,0 +1,61 @@
+Package name: mtt
+Author: Alain Frisch <Alain.Frisch@inria.fr>.
+License: see the LICENSE file.
+
+This package implements a simple transformation language for XML
+documents together with an exact type-checking algorithm. Here, types
+are seen as sets of XML documents (more precisely, the type algebra
+can express exactly regular tree languages).  Exact type-checking
+means that the algorithm is sound and complete: if a transformation is
+well-typed, it will always map values from the specified input type
+into the specified output type; if a transformation is ill-typed,
+mtt will exhibit an input which demonstrates that this property
+does not hold. This is achieved by taking a transformation language
+with a limited expressive power (as opposed to Turing-complete
+programming languages).
+
+The document SPECIF in the distribution gives the formal definitions
+of the syntax and semantics of the notions involved.
+
+Currently, mtt works only with an idealized version of XML where only
+the structural (tree-like) aspects is preserved.  In particular,
+attributes and textual content are not supported.  The evaluation is
+very slow.
+
+The current implementation should be seen as a proof of concept.
+
+Compilation
+-----------
+
+mtt is implemented in OCaml (http://caml.inria.fr). There is no
+other dependency.
+
+   make mtt.opt  (default target, compile with OCaml native compiler)
+   make mtt      (compile with OCaml bytecode compiler)
+
+
+Usage
+-----
+
+mtt takes the program on its standard input.
+
+
+Theory
+------
+
+The expressive power of programs is roughly similar the the
+theoretical notion of call-by-value macro-tree transducers, plus the
+following features: 
+- regular look-ahead (actually, the look-ahead can be done on the
+  result of some transducer applied to the input, not necessarily
+  the input itself);
+- limited local composition (the class of transformation that can
+  be expressed is thus closed under composition).
+
+ J.Engelfriet and H.Vogler. Macro Tree Transducers. Journal of Comp.
+   and System Science, 31:71-146, 1985.
+
+Examples
+--------
+
+See the files *.mtt for basic examples of transformations.
