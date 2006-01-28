@@ -1,40 +1,46 @@
 Syntax of types:
 
 T ::=  
-    |  n            Literal atom (signed 31-bit integer)
-    |  (T,T)        Cartesian product
+    |  ()           Empty sequence
+    |  a[T],T       Element
     |  T & T        Intersection
     |  T | T        Union
     |  T - T        Difference
     |  Any          Universal type
     |  Empty        Empty type
-    |  Pair         Any pair (= (Any,Any))
-    |  Atom         Any atom
-    |  X            Recursion variable (Identifier starting with uppercase)
-    |  (T)
+    |  X            Recursion variable (identifier starting with uppercase)
+    |  (T)          Syntactical grouping
 
-Loops in types must cross a (_,_) constructor.
+Loops in types must cross an element constructor.
 
 
 Syntax of transducers:
 
 E ::=  
-    |  n            Literal atom (signed 31-bit integer)
-    |  (E,E)        Pair constructor
-    |  <E           Move to the left child
-    |  >E           Move to the right child
+    |  ()           Empty sequence
+    |  a[E],E       Element
+    |  _[E],E       Element, copy tag from the input
+    |  /E           Move to the sequence of children of the first element
+    |  !E           Move to the next element
     |  if E in T then E else E      Conditional
     |  let x = E in E               Local binding
     |  rand(T)      Non-deterministic choice in T
-    |  x            Local variable (Identifier starting with lowercase)
-    |  X            Recursion variable (Identifier starting with uppercase)
+    |  (E;E)        Composition
+    |  x            Local variable (identifier starting with lowercase)
+    |  X            Recursion variable (identifier starting with uppercase)
     |  Copy         Copy the input
-    |  (E)
+    |  Error        Failure
+    |  (E)          Syntactical grouping
 
-Loops in transducers must cross a < or > constructor.
-The <E and >E transducers return the atom 0 when the current 
-input is not a pair.
 
+Loops in transducers must cross a ! or / constructor. There can be no loop
+between the right-hand side E2 of composition (E1;E2) and the composition
+itself.
+
+The /E, !E and _[E],E transducers fail when the input is the empty sequence.
+
+Values V are defined as the subset of transducers where only the
+empty sequence and the element constructors are allowed.
 
 
 Syntax of phrases:
@@ -43,7 +49,35 @@ P ::=  type X = T          Type definition
     |  expr X = E          Transducer definition
     |  check E : T -> T    Type-checking
     |  infer E in T        Backward type-inference
+    |  eval E V            Evaluation
 
 
 A script is simply a sequence of phrases. All the definitions
 are mutually recursive. The commands are evaluated in sequence.
+
+
+Semantics of transducers:
+
+The evaluation of a transducer E on a value V under an environment G
+is defined below as an interpreter. The environment is a mapping from
+variables to values. The interpreter is non-deterministic because
+of the rand(T) case. The result is either a value or Error, which behaves
+as a globally uncaught exception in the evaluator.
+
+
+eval(G, (), V) = ()
+eval(G, (a[E1],E2), V) = a[eval(G,E1,V)],eval(G,E2,V)
+eval(G, (_[E1],E2), V=(a[V1],V2)) = a[eval(G,E1,V)],eval(G,E2,V)
+eval(G, (_[E1],E2), ()) = Error
+eval(G, /E, (a[V1],V2)) = eval(G,E,V1)
+eval(G, /E, ()) = Error
+eval(G, !E, (a[V1],V2)) = eval(G,E,V2)
+eval(G, !E, ()) = Error
+eval(G, if E in T then E1 else E2, V) = eval(G,E1,V) if eval(G,E,V) is in T
+                                      = eval(G,E2,V) otherwise
+eval(G, let x = E1 in E2, V) = eval(G+(x |-> eval(G,E1,V)), E2, V)
+eval(G, rand(T), V) = a random value in T
+eval(G, (E1;E2)), V) = eval(G,E2,eval(G,E1,V))
+eval(G, x, V) = G(x)
+eval(G, Copy, V) = V
+eval(G, Error, V) = Error
