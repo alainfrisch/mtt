@@ -78,8 +78,8 @@ let rec unstack old = function
   | l when l == old -> ()
   | hd::tl -> 
       (try match Memo.find infer_memo hd with
-	 | Exn _ -> ()
-	 | Type _ ->  Memo.remove infer_memo hd
+	 | Type t when not (Ta.is_defined t) -> Memo.remove infer_memo hd
+	 | _ -> ()
        with Not_found -> ());
       unstack old tl;
   | [] -> assert false

@@ -483,4 +483,4 @@ let is_defined t =
     Pt.Map.iter (fun _ tr -> check_tr tr) x.trans
   in
   try check_t t; true
-  with Not_found -> false
+  with Exit -> false
