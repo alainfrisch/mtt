@@ -8,14 +8,11 @@ parser.cmo: syntax.cmo parser.cmi
 parser.cmx: syntax.cmx parser.cmi 
 pt.cmo: pt.cmi 
 pt.cmx: pt.cmi 
-ptmap.cmo: ptmap.cmi 
-ptmap.cmx: ptmap.cmi 
-ptset.cmo: ptset.cmi 
-ptset.cmx: ptset.cmi 
-syntax.cmo: ta.cmi mtt.cmo 
-syntax.cmx: ta.cmx mtt.cmx 
+syntax.cmo: ta.cmi regexp.cmo mtt.cmo 
+syntax.cmx: ta.cmx regexp.cmx mtt.cmx 
 ta.cmo: robdd.cmo pt.cmi ta.cmi 
 ta.cmx: robdd.cmx pt.cmx ta.cmi 
 tatest.cmo: ta.cmi mtt.cmo 
 tatest.cmx: ta.cmx mtt.cmx 
 parser.cmi: syntax.cmo 
+ta.cmi: pt.cmi 

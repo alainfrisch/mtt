@@ -7,12 +7,17 @@ T ::=
     |  T & T        Intersection
     |  T | T        Union
     |  T - T        Difference
-    |  Any          Universal type
+    |  T,T          Sequence
+    |  T*           Repetition
+    |  T+           Non-empty repetition
+    |  Any          Universal type (any sequence)
     |  Empty        Empty type
     |  X            Recursion variable (identifier starting with uppercase)
     |  (T)          Syntactical grouping
 
-Loops in types must cross an element constructor.
+Loops in types must cross an element constructor. Boolean connective
+& and - cannot appear under reguler expression constructor
+(sequence, repetition).
 
 
 Syntax of transducers:

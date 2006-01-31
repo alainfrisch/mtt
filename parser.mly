@@ -3,11 +3,14 @@
 %token EQUAL COMMA COLON ARROW SEMICOLON
 %token EOF LBRACKET RBRACKET UNDERSCORE
 %token<int> INT
-%token LPAREN RPAREN LET LETN IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL AND
+%token LPAREN RPAREN LET LETN IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH 
+%token INFER RAND CHECK EVAL AND STAR PLUS AT
 
-%right PIPE DASH
-%right AMPERSAND
-%nonassoc COMMA
+%nonassoc IN ELSE
+%right AMPERSAND DASH
+%right PIPE
+%right COMMA
+%nonassoc STAR PLUS LEFT RIGHT
 
 %start prog
 %type <Syntax.Phrase.t list> prog
@@ -35,21 +38,21 @@ args:
 
 typ:
  | LPAREN RPAREN { Syntax.Type.Eps }
- | UNDERSCORE LBRACKET typ_opt RBRACKET typ_rest { Syntax.Type.AnyElt ($3,$5) }
- | LIDENT LBRACKET typ_opt RBRACKET typ_rest { Syntax.Type.Elt ($1,$3,$5) }
+ | UNDERSCORE LBRACKET typ_opt RBRACKET { Syntax.Type.AnyElt $3 }
+ | LIDENT LBRACKET typ_opt RBRACKET { Syntax.Type.Elt ($1,$3) }
  | UIDENT { Syntax.Type.Ident $1 }
+ | typ COMMA typ { Syntax.Type.Seq ($1,$3) }
  | typ AMPERSAND typ { Syntax.Type.And ($1,$3) }
- | typ PIPE typ { Syntax.Type.Or ($1,$3) }
+ | typ PIPE typ { Syntax.Type.Alt ($1,$3) }
  | typ DASH typ { Syntax.Type.Diff ($1,$3) }
  | LPAREN typ RPAREN { $2 }
+ | typ STAR { Syntax.Type.Star $1 }
+ | typ PLUS { Syntax.Type.Plus $1 }
 
 typ_opt:
  | typ { $1 }
  |     { Syntax.Type.Eps }
 
-typ_rest:
- | COMMA typ { $2 }
- |           { Syntax.Type.Eps }
 
 expr:
  | LIDENT { Syntax.Expr.Var $1 }
@@ -60,11 +63,12 @@ expr:
  | RIGHT expr { Syntax.Expr.Right $2 }
  | IF expr IN typ THEN expr ELSE expr { Syntax.Expr.Cond ($2,$4,$6,$8) }
  | LPAREN expr RPAREN { $2 }
- | LIDENT LBRACKET expr_opt RBRACKET expr_rest { Syntax.Expr.Elt ($1,$3,$5) }
- | UNDERSCORE LBRACKET expr_opt RBRACKET expr_rest { Syntax.Expr.CopyTag ($3,$5) }
+ | LIDENT LBRACKET expr_opt RBRACKET { Syntax.Expr.Elt ($1,$3) }
+ | UNDERSCORE LBRACKET expr_opt RBRACKET { Syntax.Expr.CopyTag ($3) }
  | RAND LPAREN typ RPAREN { Syntax.Expr.Random $3 }
  | LPAREN RPAREN { Syntax.Expr.Eps }
  | LPAREN expr SEMICOLON expr RPAREN { Syntax.Expr.Compose ($2,$4) }
+ | expr COMMA expr { Syntax.Expr.Concat ($1,$3) }
 
 bindings:
  | LIDENT EQUAL expr AND bindings { ($1,$3)::$5 }
@@ -82,7 +86,3 @@ expr_list:
 expr_opt:
  | expr { $1 }
  |     { Syntax.Expr.Eps }
-
-expr_rest:
- | COMMA expr { $2 }
- |           { Syntax.Expr.Eps }

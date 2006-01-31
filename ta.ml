@@ -417,7 +417,7 @@ and norm_aux tr =
        let t1 = 
 	 if is_any t1 then Trans.one else Trans.(!!!) (Fst (normalize t1))
        and t2 = 
-	 if is_any t2 then Trans.one else Trans.(!!!) (Fst (normalize t2))
+	 if is_any t2 then Trans.one else Trans.(!!!) (Snd (normalize t2))
        in
        Trans.(|||) accu (Trans.(&&&) t1 t2)
     )

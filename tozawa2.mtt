@@ -1,23 +1,10 @@
 type Input = doc[preface[header[],Paras],Blocs]
-type Blocs = () | div[Blocs],Blocs | p[],Blocs | note[Paras],Blocs
-type Paras = () | p[],Paras
+type Blocs = (div[Blocs] | p[] | note[Paras])*
+type Paras = p[]*
 
-type Xhtml = html[head[T1],body[Blocks]]
-type T1 = meta[],T1 | title[],T2
-type T2 = () | meta[],T2
-type Blocks = () 
-  | h1[],Blocks
-  | h2[],Blocks
-  | h3[],Blocks
-  | h4[],Blocks
-  | h5[],Blocks
-  | h6[],Blocks
-  | h7[],Blocks
-  | h8[],Blocks
-  | h9[],Blocks
-  | p[],Blocks
-  | b[],Blocks
-  | div[Blocks],Blocks
+type Xhtml = html[head[meta[]*, title[], meta[]*],body[Blocks]]
+type Blocks = (h1[]|h2[]|h3[]|h4[]|h5[]|h6[]|h7[]|h8[]|h9[]
+              |p[]|b[]|div[Blocks])*
 
 expr Rest2 =
   if Copy in () then rest
@@ -30,18 +17,6 @@ expr RestHtml =
   else let rest = !RestHtml in 
   if Copy in preface[Any],Any | note[Any],Any then /Rest2
   else /RestHtml
-
-(*
-expr Body =
-  if Copy in () then rest
-  else if Copy in preface[Any],Any | note[Any],Any then !Body
-  else _[let rest=() in /Body],!Body
-
-expr AppHtml =
-  let rest = () in
-  let rest = div[ h2[], /RestHtml ] in
-  html[ head[title[]], body[/Body]]
-  *)
 
 expr Body = 
   if Copy in () then ()

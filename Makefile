@@ -4,7 +4,7 @@ CAMLOPT = ocamlopt
 all: mtt.opt
 
 OBJECTS = \
-  robdd.cmo pt.cmo ta.cmo mtt.cmo syntax.cmo parser.cmo lexer.cmo \
+  robdd.cmo pt.cmo ta.cmo mtt.cmo regexp.cmo syntax.cmo parser.cmo lexer.cmo \
   main.cmo
 
 mtt: $(OBJECTS)
