@@ -29,7 +29,8 @@ E ::=
     |  rand(T)      Non-deterministic choice in T
     |  (E;E)        Composition
     |  x            Local variable (identifier starting with lowercase)
-    |  X            Recursion variable (identifier starting with uppercase)
+    |  X(E1;...;En) Recursive call (identifier starting with uppercase)
+    |  X            Recursive call without argument
     |  Copy         Copy the input
     |  Error        Failure
     |  (E)          Syntactical grouping
@@ -50,10 +51,11 @@ empty sequence and the element constructors are allowed.
 Syntax of phrases:
 
 P ::=  type X = T          Type definition
-    |  expr X = E          Transducer definition
+    |  expr X(x1;...;xn) = E          Transducer definition
+    |  expr X = E                     Transducer definition without argument
     |  check E : T -> T    Type-checking
     |  infer E in T        Backward type-inference
-    |  eval E V            Evaluation
+    |  eval E              Evaluation (starting from the empty value)
 
 
 A script is simply a sequence of phrases. All the definitions
@@ -92,3 +94,7 @@ eval(G, Error, V) = Error
 
 where Eval(G,E,V) is the set of all possible results for eval(G,E,V).
 
+Recursive call are expanded. If the declaration for X is:
+  expr X(x1;...;xn) = E
+then the expression X(E1;...;En) is equivalent to
+  let x1 = E1 and ... and xn = n in E

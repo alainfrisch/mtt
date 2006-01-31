@@ -26,6 +26,6 @@ expr Appendix =
   let rest = appendix[/Rest] in
   doc[/Body]
 
-eval Appendix doc[ preface[ header[p3[]] ], p1[], p2[], note[ z[]]  ]
+eval (doc[ preface[ header[p3[]] ], p1[], p2[], note[ z[]]  ]; Appendix)
 
 check Appendix: Input -> Output

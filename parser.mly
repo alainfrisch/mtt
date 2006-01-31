@@ -19,10 +19,19 @@ prog:
 
 phrase:
  | TYPE UIDENT EQUAL typ { Syntax.Phrase.Type ($2,$4) }
- | EXPR UIDENT EQUAL expr { Syntax.Phrase.Expr ($2,$4) } 
+ | EXPR UIDENT opt_args EQUAL expr { Syntax.Phrase.Expr ($2,$3,$5) } 
  | INFER expr IN typ { Syntax.Phrase.Infer ($2,$4) }
  | CHECK expr COLON typ ARROW typ { Syntax.Phrase.Check ($2,$4,$6) }
- | EVAL expr expr { Syntax.Phrase.Eval($2,$3) }
+ | EVAL expr { Syntax.Phrase.Eval($2) }
+
+opt_args:
+ | LPAREN args RPAREN { $2 }
+ | LPAREN RPAREN { [] }
+ | { [] }
+
+args:
+ | LIDENT SEMICOLON args { $1::$3 }
+ | LIDENT { [$1] }
 
 typ:
  | LPAREN RPAREN { Syntax.Type.Eps }
@@ -44,7 +53,7 @@ typ_rest:
 
 expr:
  | LIDENT { Syntax.Expr.Var $1 }
- | UIDENT { Syntax.Expr.Ident $1 }
+ | UIDENT expr_list_opt { Syntax.Expr.Call ($1,$2) }
  | LET bindings IN expr { Syntax.Expr.Let ($2,$4) }
  | LETN bindings IN expr { Syntax.Expr.LetN ($2,$4) }
  | LEFT expr { Syntax.Expr.Left $2 }
@@ -60,6 +69,15 @@ expr:
 bindings:
  | LIDENT EQUAL expr AND bindings { ($1,$3)::$5 }
  | LIDENT EQUAL expr { [($1,$3) ] }
+
+expr_list_opt:
+ | LPAREN expr_list RPAREN { $2 }
+ | LPAREN RPAREN { [] }
+ | { [] }
+
+expr_list:
+ | expr { [$1] }
+ | expr SEMICOLON expr_list { $1::$3 }
 
 expr_opt:
  | expr { $1 }

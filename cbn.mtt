@@ -8,4 +8,10 @@ infer (let a = Pick in m[a],a) in T
 infer (letn a = Pick in m[a],a) in T
 
 
-infer (let x = a[] and y = x in c[x],y) in c[a[]],c[]
+expr Append(tl) =
+  if Copy in () then tl
+  else (_[/Copy],!Append(tl))
+
+expr Concat(l1;l2) = (l1; Append(l2))
+
+eval (c[],d[]; Concat(a[],b[];Copy))
