@@ -43,8 +43,9 @@ mtt takes the program on its standard input.
 Theory
 ------
 
-The expressive power of programs is roughly similar the the
-theoretical notion of call-by-value macro-tree transducers, plus the
+The expressive power of programs is roughly similar to the
+theoretical notion of macro-tree transducers (call-by-name and/or
+call-by-value), plus the
 following features: 
 - regular look-ahead (actually, the look-ahead can be done on the
   result of some transducer applied to the input, not necessarily
