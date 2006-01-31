@@ -24,8 +24,8 @@ E ::=
     |  /E           Move to the sequence of children of the first element
     |  !E           Move to the next element
     |  if E in T then E else E      Conditional
-    |  let x = E in E               Local binding, call by value
-    |  letn x = E in E              Local binding, call by name
+    |  let B in E                   Local binding, call by value
+    |  letn B in E                  Local binding, call by name
     |  rand(T)      Non-deterministic choice in T
     |  (E;E)        Composition
     |  x            Local variable (identifier starting with lowercase)
@@ -33,6 +33,8 @@ E ::=
     |  Copy         Copy the input
     |  Error        Failure
     |  (E)          Syntactical grouping
+
+B ::= x = E and ... and x = E
 
 
 Loops in transducers must cross a ! or / constructor. There can be no loop
@@ -78,8 +80,10 @@ eval(G, !E, (a[V1],V2)) = eval(G,E,V2)
 eval(G, !E, ()) = Error
 eval(G, if E in T then E1 else E2, V) = eval(G,E1,V) if eval(G,E,V) is in T
                                       = eval(G,E2,V) otherwise
-eval(G, let x = E1 in E2, V) = eval(G+(x |-> {eval(G,E1,V)}), E2, V)
-eval(G, let x = E1 in E2, V) = eval(G+(x |-> Eval(G,E1,V)), E2, V)
+eval(G, let x1 = E1 ... and xn = En in E, V) = 
+  eval(G+(xi |-> {eval(G,Ei,V)}), E, V)
+eval(G, let x1 = E1 ... and xn = En in E, V) = 
+  eval(G+(x |-> Eval(G,Ei,V)), E, V)
 eval(G, rand(T), V) = a random value in T
 eval(G, (E1;E2)), V) = eval(G,E2,eval(G,E1,V))
 eval(G, x, V) = a rand value in G(x)

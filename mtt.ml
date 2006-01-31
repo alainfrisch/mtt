@@ -29,8 +29,8 @@ and expr_descr =
   | ECopyTag of expr * expr
   | ECopy
   | EVar of var
-  | ELet of var * expr * expr
-  | ELetCbn of var * expr * expr
+  | ELet of (var * expr) list  * expr
+  | ELetN of (var * expr) list * expr
   | ECond of expr * Ta.t * expr * expr
   | ERand of Ta.t
   | ESub of dir * expr
@@ -134,10 +134,8 @@ and infer_descr env uid e t = match e.descr with
   | ECopyTag (e1,e2) -> infer_copytag env e1 e2 t
   | EElt (i,e1,e2) -> infer_elt env i e1 e2 t
   | ESub (dir,e) -> infer_sub env uid dir e t
-  | ELet (x,e1,e2) -> 
-      inter (infer env e1 Ta.any) (infer_let env x e1 e2 Ta.any t) ()
-  | ELetCbn (x,e1,e2) -> 
-      inter (infer env e1 Ta.any) (infer_let_cbn env x e1 e2 Ta.any [] t) ()
+  | ELet (binds,e2) -> infer_let env binds e2 t
+  | ELetN (binds,e2) -> infer_letn env binds e2 t
   | ECompose (e1,e2) -> infer env e1 (infer env e2 t ()) ()
   | EError -> Ta.empty
 
@@ -197,33 +195,67 @@ and infer_sub env idx dir e t =
   Ta.def n (infer env e t ());
   r
 
-and infer_let env x e1 e2 dom t () =
+and infer_let env binds e2 t =
+  let rec aux t1 env' = function
+    | [] -> Ta.inter t1 (infer_let_aux env binds env' e2 t ())
+    | (x,e1)::rest ->
+	let env' = Env.add x (Ta.any,[]) env' 
+	and t1 = Ta.inter t1 (infer env e1 Ta.any ()) in
+	if is_empty t1 then Ta.empty else aux t1 env' rest
+  in
+  aux Ta.any env binds
+  
+and infer_let_aux env binds env' e2 t () =
   let old_stack = !infer_stack in
-  match (try Type (infer (Env.add x (dom,[]) env) e2 t ()) 
-	 with exn -> Exn exn) with
-    | Type t2 -> union (fun () -> t2) (infer env e1 (Ta.neg dom)) ()
-    | Exn (Refine (y,tx)) when x == y ->
+  match (try Type (infer env' e2 t ()) with exn -> Exn exn) with
+    | Type t2 -> 
+	let rec aux accu = function
+	  | (x,e1)::rest ->
+	      if is_any accu then Ta.any
+	      else 
+		let t' = infer env e1 (Ta.neg (fst (Pt.Map.find x env'))) () in
+		aux (Ta.union accu t') rest
+	  | [] -> accu in
+	aux t2 binds
+
+    | Exn (Refine (x,tx)) when List.mem_assq x binds ->
 	unstack old_stack !infer_stack; 
 	infer_stack := old_stack;
 	inter 
-	  (infer_let env x e1 e2 (Ta.inter dom tx) t)
-	  (infer_let env x e1 e2 (Ta.diff dom tx) t)
+	  (infer_let_aux env binds 
+	     (Pt.Map.change x (fun (t,_) -> (Ta.inter t tx, [])) env') e2 t)
+	  (infer_let_aux env binds 
+	     (Pt.Map.change x (fun (t,_) -> (Ta.diff t tx, [])) env') e2 t)
 	  ()
     | Exn exn -> raise exn
 
-and infer_let_cbn env x e1 e2 pos neg t () =
+and infer_letn env binds e2 t =
+  let rec aux t1 env' = function
+    | [] -> Ta.inter t1 (infer_letn_aux env binds env' e2 t ())
+    | (x,e1)::rest ->
+	let env' = Env.add x (Ta.any,[]) env' 
+	and t1 = Ta.inter t1 (infer env e1 Ta.any ()) in
+	if is_empty t1 then Ta.empty else aux t1 env' rest
+  in
+  aux Ta.any env binds
+  
+and infer_letn_aux env binds env' e2 t () =
   let old_stack = !infer_stack in
-  try infer (Env.add x (pos,neg) env) e2 t ()
-  with Refine (y,tx) when x == y ->
+  try infer env' e2 t ()
+  with Refine (x,tx) when List.mem_assq x binds ->
     unstack old_stack !infer_stack; 
     infer_stack := old_stack;
 
-    let t1 = infer env e1 tx () in
+    let t1 = infer env (List.assq x binds) tx () in
     union
       (inter (fun () -> t1) 
-	 (infer_let_cbn env x e1 e2 (Ta.inter pos tx) neg t))
+	 (infer_letn_aux env binds 
+	    (Pt.Map.change x (fun (t,neg) -> (Ta.inter t tx, neg)) env') e2
+	    t))
       (inter (fun () -> Ta.neg t1) 
-	 (infer_let_cbn env x e1 e2 pos (List.sort Ta.compare (tx::neg)) t))
+	 (infer_letn_aux env binds
+	    (Pt.Map.change x (fun (t,neg) -> (t, List.sort Ta.compare (tx::neg))) env') e2
+	    t))
       ()
 
 exception Error
@@ -240,8 +272,13 @@ let rec eval env e v = match e.descr with
       (try Pt.Map.find x env
        with Not_found ->
 	 raise Error)
-  | ELet (x,e1,e2) | ELetCbn (x,e1,e2) -> 
-      eval (Pt.Map.add x (eval env e1 v) env) e2 v
+  | ELet (binds,e2) | ELetN (binds,e2) ->
+      let env' = 
+	List.fold_left
+	  (fun env' (x,e1) -> Pt.Map.add x (eval env e1 v) env')
+	  env
+	  binds in
+      eval env' e2 v
   | ECond (e,t,e1,e2) ->
       eval env (if Ta.is_in (eval env e v) t then e1 else e2) v
   | ERand t -> Ta.sample t
@@ -271,8 +308,9 @@ let check_compose e =
 	    | ESub (_,e) -> aux e
 	    | EElt (_,e1,e2)
 	    | ECopyTag (e1,e2)
-	    | ELet (_,e1,e2) | ELetCbn (_,e1,e2)
-	    | ECompose (e1,e2) -> aux e1; aux e2)
+	    | ECompose (e1,e2) -> aux e1; aux e2
+	    | ELet (binds,e2) 
+	    | ELetN (binds,e2) -> List.iter (fun (_,e) -> aux e) binds; aux e2)
   in
   match e.descr with
     | ECompose (e1,e2) -> 

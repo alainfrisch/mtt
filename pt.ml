@@ -430,6 +430,16 @@ let set k f t =
   in
   ins t
 
+let change k f t =
+  let rec ins = function
+    | Leaf (j,x) when j = k -> Leaf (k,f x)
+    | Branch (p,m,t0,t1) when match_prefix k p m ->
+	if zero_bit k m then Branch (p, m, ins t0, t1)
+	else Branch (p, m, t0, ins t1)
+    | _ -> raise Not_found
+  in
+  ins t
+
 let branch = function
   | (_,_,Empty,t) -> t
   | (_,_,t,Empty) -> t

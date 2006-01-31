@@ -105,6 +105,8 @@ module Map : sig
   val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
     
   val set : int -> ('a option -> 'a) -> 'a t -> 'a t
+
+  val change : int -> ('a -> 'a) -> 'a t -> 'a t
     
   val unset : int -> ('a -> 'a option) -> 'a t -> 'a t
     

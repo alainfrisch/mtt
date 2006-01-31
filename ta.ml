@@ -414,9 +414,12 @@ let rec normalize t =
 and norm_aux tr =
   List.fold_left
     (fun accu (t1,t2) ->
-       Trans.(|||) accu 
-	 (Trans.(&&&) (Trans.(!!!) (Fst (normalize t1)))
-	    (Trans.(!!!) (Snd (normalize t2))))
+       let t1 = 
+	 if is_any t1 then Trans.one else Trans.(!!!) (Fst (normalize t1))
+       and t2 = 
+	 if is_any t2 then Trans.one else Trans.(!!!) (Fst (normalize t2))
+       in
+       Trans.(|||) accu (Trans.(&&&) t1 t2)
     )
     Trans.zero
     (normalize_dnf (dnf_trans tr))

@@ -14,8 +14,8 @@ module Expr = struct
     | Ident of string
     | Random of Type.t
     | Var of string
-    | Let of string * t * t
-    | LetN of string * t * t
+    | Let of (string * t) list * t
+    | LetN of (string * t) list * t
     | Left of t
     | Right of t
     | Cond of t * Type.t * t * t
@@ -91,10 +91,10 @@ let parse prog =
 	if Ta.is_empty t then
 	  (Printf.eprintf "Cannot rand(_) an empty type\n"; exit 1);
 	ex (Mtt.ERand t)
-    | Expr.Let (x,e1,e2) -> 
-	ex (Mtt.ELet (Mtt.var_of_string x, parse_expr g e1, parse_expr g e2))
-    | Expr.LetN (x,e1,e2) -> 
-	ex (Mtt.ELetCbn (Mtt.var_of_string x, parse_expr g e1, parse_expr g e2))
+    | Expr.Let (binds,e2) -> 
+	ex (Mtt.ELet (parse_bindings g binds, parse_expr g e2))
+    | Expr.LetN (binds,e2) -> 
+	ex (Mtt.ELetN (parse_bindings g binds, parse_expr g e2))
     | Expr.Left e -> 
 	ex (Mtt.ESub (Mtt.Fst, parse_expr_node e))
     | Expr.Right e -> 
@@ -106,6 +106,9 @@ let parse prog =
 	let r = ex (Mtt.ECompose (parse_expr g e1, parse_expr g e2)) in
 	composes := r :: !composes;
 	r
+
+  and parse_bindings g binds =
+    List.map (fun (x,e) -> Mtt.var_of_string x, parse_expr g e) binds
 
   and parse_expr_node e =
     try Hashtbl.find expr_nodes e

@@ -25,6 +25,7 @@ rule token = parse
 	| "rand" -> RAND
 	| "check" -> CHECK
 	| "eval" -> EVAL
+	| "and" -> AND
 	| s -> LIDENT s
     }
   | uppercase identchar* { UIDENT (Lexing.lexeme lexbuf) }

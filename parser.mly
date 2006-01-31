@@ -3,7 +3,7 @@
 %token EQUAL COMMA COLON ARROW SEMICOLON
 %token EOF LBRACKET RBRACKET UNDERSCORE
 %token<int> INT
-%token LPAREN RPAREN LET LETN IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL
+%token LPAREN RPAREN LET LETN IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL AND
 
 %right PIPE DASH
 %right AMPERSAND
@@ -45,8 +45,8 @@ typ_rest:
 expr:
  | LIDENT { Syntax.Expr.Var $1 }
  | UIDENT { Syntax.Expr.Ident $1 }
- | LET LIDENT EQUAL expr IN expr { Syntax.Expr.Let ($2,$4,$6) }
- | LETN LIDENT EQUAL expr IN expr { Syntax.Expr.LetN ($2,$4,$6) }
+ | LET bindings IN expr { Syntax.Expr.Let ($2,$4) }
+ | LETN bindings IN expr { Syntax.Expr.LetN ($2,$4) }
  | LEFT expr { Syntax.Expr.Left $2 }
  | RIGHT expr { Syntax.Expr.Right $2 }
  | IF expr IN typ THEN expr ELSE expr { Syntax.Expr.Cond ($2,$4,$6,$8) }
@@ -56,6 +56,10 @@ expr:
  | RAND LPAREN typ RPAREN { Syntax.Expr.Random $3 }
  | LPAREN RPAREN { Syntax.Expr.Eps }
  | LPAREN expr SEMICOLON expr RPAREN { Syntax.Expr.Compose ($2,$4) }
+
+bindings:
+ | LIDENT EQUAL expr AND bindings { ($1,$3)::$5 }
+ | LIDENT EQUAL expr { [($1,$3) ] }
 
 expr_opt:
  | expr { $1 }
