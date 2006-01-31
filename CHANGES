@@ -1,1 +1,6 @@
+Since 0.1
+ * Add the _[T],T type
+ * Call-by-name local binding
+ * Normalization of the result of type inference
+
 0.1 (2006-01-28), initial release
