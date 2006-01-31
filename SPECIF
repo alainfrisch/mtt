@@ -3,6 +3,7 @@ Syntax of types:
 T ::=  
     |  ()           Empty sequence
     |  a[T],T       Element
+    |  _[T],T       Element with any tag
     |  T & T        Intersection
     |  T | T        Union
     |  T - T        Difference
@@ -23,7 +24,8 @@ E ::=
     |  /E           Move to the sequence of children of the first element
     |  !E           Move to the next element
     |  if E in T then E else E      Conditional
-    |  let x = E in E               Local binding
+    |  let x = E in E               Local binding, call by value
+    |  letn x = E in E              Local binding, call by name
     |  rand(T)      Non-deterministic choice in T
     |  (E;E)        Composition
     |  x            Local variable (identifier starting with lowercase)
@@ -60,9 +62,10 @@ Semantics of transducers:
 
 The evaluation of a transducer E on a value V under an environment G
 is defined below as an interpreter. The environment is a mapping from
-variables to values. The interpreter is non-deterministic because
-of the rand(T) case. The result is either a value or Error, which behaves
-as a globally uncaught exception in the evaluator.
+variables to non empty sets of values. The interpreter is
+non-deterministic because of the rand(T) case. The result is either a
+value or Error, which behaves as a globally uncaught exception in the
+evaluator.
 
 
 eval(G, (), V) = ()
@@ -75,9 +78,13 @@ eval(G, !E, (a[V1],V2)) = eval(G,E,V2)
 eval(G, !E, ()) = Error
 eval(G, if E in T then E1 else E2, V) = eval(G,E1,V) if eval(G,E,V) is in T
                                       = eval(G,E2,V) otherwise
-eval(G, let x = E1 in E2, V) = eval(G+(x |-> eval(G,E1,V)), E2, V)
+eval(G, let x = E1 in E2, V) = eval(G+(x |-> {eval(G,E1,V)}), E2, V)
+eval(G, let x = E1 in E2, V) = eval(G+(x |-> Eval(G,E1,V)), E2, V)
 eval(G, rand(T), V) = a random value in T
 eval(G, (E1;E2)), V) = eval(G,E2,eval(G,E1,V))
-eval(G, x, V) = G(x)
+eval(G, x, V) = a rand value in G(x)
 eval(G, Copy, V) = V
 eval(G, Error, V) = Error
+
+where Eval(G,E,V) is the set of all possible results for eval(G,E,V).
+

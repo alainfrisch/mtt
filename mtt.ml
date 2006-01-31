@@ -30,6 +30,7 @@ and expr_descr =
   | ECopy
   | EVar of var
   | ELet of var * expr * expr
+  | ELetCbn of var * expr * expr
   | ECond of expr * Ta.t * expr * expr
   | ERand of Ta.t
   | ESub of dir * expr
@@ -37,12 +38,28 @@ and expr_descr =
   | EError
 
 module Input = struct
-  type t = Ta.t Env.t * int * Ta.t
+  type t = (Ta.t * Ta.t list) Env.t * int * Ta.t
+
+
+  let rec hash_ta_list accu = function
+    | [] -> accu 
+    | hd::tl -> hash_ta_list (Ta.hash hd + accu * 257) tl
+
+  let hash_x (t,tl) = 
+    hash_ta_list (Ta.hash t) tl
+      
+  let rec equal_ta_list l1 l2 = match (l1,l2) with
+    | hd1::tl1, hd2::tl2 when Ta.equal hd1 hd2 -> equal_ta_list tl1 tl2
+    | [], [] -> true
+    | _ -> false
+
+  let equal_x (t1,tl1) (t2,tl2) =
+    Ta.equal t1 t2 && equal_ta_list tl1 tl2
 
   let hash (env,e,t) =
-    (Env.hash Ta.hash env) + (257 * e) + 65537 * (Ta.hash t)
+    (Env.hash hash_x env) + (257 * e) + 65537 * (Ta.hash t)
   let equal (env1,e1,t1) (env2,e2,t2) =
-    (e1 == e2) && (Env.equal Ta.equal env1 env2) && (Ta.equal t1 t2)
+    (e1 == e2) && (Env.equal equal_x env1 env2) && (Ta.equal t1 t2)
 end
 
 type res = Type of Ta.t | Exn of exn
@@ -63,6 +80,10 @@ let is_any t =
 
 let is_noneps t =
   try Ta.is_equal t Ta.noneps
+  with Ta.Undefined -> false
+
+let is_eps t =
+  try Ta.is_equal t Ta.eps
   with Ta.Undefined -> false
 
 
@@ -95,7 +116,8 @@ let rec infer env e t () =
 	let r = 
 	  if is_empty r then Ta.empty 
 	  else if is_any r then Ta.any
-	  else if is_noneps r then Ta.noneps else r in
+	  else if is_noneps r then Ta.noneps
+	  else if is_eps r then Ta.eps else r in
 	Memo.replace infer_memo i (Type r);
 	infer_stack := i :: !infer_stack;
 	r
@@ -114,6 +136,8 @@ and infer_descr env uid e t = match e.descr with
   | ESub (dir,e) -> infer_sub env uid dir e t
   | ELet (x,e1,e2) -> 
       inter (infer env e1 Ta.any) (infer_let env x e1 e2 Ta.any t) ()
+  | ELetCbn (x,e1,e2) -> 
+      inter (infer env e1 Ta.any) (infer_let_cbn env x e1 e2 Ta.any [] t) ()
   | ECompose (e1,e2) -> infer env e1 (infer env e2 t ()) ()
   | EError -> Ta.empty
 
@@ -146,13 +170,17 @@ and infer_copytag env e1 e2 t =
   with Exit -> Ta.empty
 
 and infer_var env x t =
-  let tx = 
+  let (pos,neg) = 
     try Env.find x env
     with Not_found -> 
       Printf.eprintf "Unbound variable %s\n" (string_of_var x); exit 1 in
-  if Ta.subset tx t then Ta.any
-  else if Ta.disjoint t tx then Ta.empty
-  else raise (Refine (x,t))
+
+  if Ta.subset pos t then Ta.any
+  else 
+    let tx = Ta.inter pos t in
+    if Ta.is_empty tx || (List.exists (fun n -> Ta.subset tx n) neg)
+    then Ta.empty
+    else raise (Refine (x,t))
 
 and infer_cond env e t' e1 e2 t =
   inter (infer env e Ta.any)
@@ -163,6 +191,7 @@ and infer_cond env e t' e1 e2 t =
 
 and infer_sub env idx dir e t =
   let n = Ta.mk () in
+(*  Format.fprintf Format.std_formatter "Create node %i for expr %i, dir %i, output type:%a" (Ta.uid n) e.uid (match dir with Fst -> 0 | Snd -> 1) Ta.print t; *)
   let r = match dir with Fst -> Ta.fst n | Snd -> Ta.snd n in
   Memo.replace infer_memo idx (Type r);
   Ta.def n (infer env e t ());
@@ -170,7 +199,7 @@ and infer_sub env idx dir e t =
 
 and infer_let env x e1 e2 dom t () =
   let old_stack = !infer_stack in
-  match (try Type (infer (Env.add x dom env) e2 t ()) 
+  match (try Type (infer (Env.add x (dom,[]) env) e2 t ()) 
 	 with exn -> Exn exn) with
     | Type t2 -> union (fun () -> t2) (infer env e1 (Ta.neg dom)) ()
     | Exn (Refine (y,tx)) when x == y ->
@@ -181,6 +210,21 @@ and infer_let env x e1 e2 dom t () =
 	  (infer_let env x e1 e2 (Ta.diff dom tx) t)
 	  ()
     | Exn exn -> raise exn
+
+and infer_let_cbn env x e1 e2 pos neg t () =
+  let old_stack = !infer_stack in
+  try infer (Env.add x (pos,neg) env) e2 t ()
+  with Refine (y,tx) when x == y ->
+    unstack old_stack !infer_stack; 
+    infer_stack := old_stack;
+
+    let t1 = infer env e1 tx () in
+    union
+      (inter (fun () -> t1) 
+	 (infer_let_cbn env x e1 e2 (Ta.inter pos tx) neg t))
+      (inter (fun () -> Ta.neg t1) 
+	 (infer_let_cbn env x e1 e2 pos (List.sort Ta.compare (tx::neg)) t))
+      ()
 
 exception Error
 
@@ -196,7 +240,8 @@ let rec eval env e v = match e.descr with
       (try Pt.Map.find x env
        with Not_found ->
 	 raise Error)
-  | ELet (x,e1,e2) -> eval (Pt.Map.add x (eval env e1 v) env) e2 v
+  | ELet (x,e1,e2) | ELetCbn (x,e1,e2) -> 
+      eval (Pt.Map.add x (eval env e1 v) env) e2 v
   | ECond (e,t,e1,e2) ->
       eval env (if Ta.is_in (eval env e v) t then e1 else e2) v
   | ERand t -> Ta.sample t
@@ -226,7 +271,7 @@ let check_compose e =
 	    | ESub (_,e) -> aux e
 	    | EElt (_,e1,e2)
 	    | ECopyTag (e1,e2)
-	    | ELet (_,e1,e2)
+	    | ELet (_,e1,e2) | ELetCbn (_,e1,e2)
 	    | ECompose (e1,e2) -> aux e1; aux e2)
   in
   match e.descr with

@@ -39,3 +39,17 @@ parser.ml: parser.mly
 
 lexer.ml: lexer.mll
 	ocamllex $<
+
+PACKAGE=mtt-0.1
+PACK_FILES=\
+ Makefile .depend *.ml *.mli *.mly *.mll *.mtt \
+ CHANGES LICENSE README SPECIF
+
+package:
+	rm -Rf $(PACKAGE)
+	mkdir $(PACKAGE)
+	cp $(PACK_FILES) $(PACKAGE)
+	tar czf $(PACKAGE).tar.gz $(PACKAGE)
+copy:
+	scp $(PACKAGE).tar.gz README SPECIF \
+          buzet.inria.fr:public_html/mtt

@@ -80,6 +80,7 @@ let mk () =
 let def n t = n.descr <- t; n.undef <- false
 let get t = assert(not t.undef); t.descr
 let cons t = let n = mk () in def n t; n
+let uid n = n.uid
 
 let inter t1 t2 = 
   typ 
@@ -380,7 +381,6 @@ let print ppf t =
   loop ()
 
 
-(*
 let normalize_dnf l =
   let rec add accu t1 t2 = function
     | [] -> (t1,t2) :: accu
@@ -397,7 +397,7 @@ let normalize_dnf l =
   in
   List.fold_left (fun accu (t1,t2) -> add [] t1 t2 accu) [] l
 
-module Memo = Hashtbl.Make(Node)
+module Memo = Hashtbl.Make(Descr)
 
 let normalize_memo = Memo.create 4096
 
@@ -407,22 +407,23 @@ let rec normalize t =
 (*    Format.fprintf Format.std_formatter "Normalize (uid=%i):%a@." 
       (Trans.uid t.trans)
       print t; *)
-    let t' = mk () in
-    Memo.add normalize_memo t t';
-    t'.atoms <- t.atoms;
-    t'.trans <- 
-      List.fold_left
-      (fun accu (t1,t2) ->
-	 Trans.(|||) accu 
-	   (Trans.(&&&) (Trans.(!!!) (Fst (normalize t1)))
-	      (Trans.(!!!) (Snd (normalize t2))))
-      )
-      Trans.zero
-      ((*normalize_dnf*) (dnf_trans t.trans));
-      t'.undef <- false;
-(*    Memo.add normalize_memo t' t'; *)
-    t'
+    let n = mk () in
+    Memo.add normalize_memo t n;
+    def n (typ t.eps (Pt.Map.map norm_aux t.trans) (norm_aux t.def));
+    n
+and norm_aux tr =
+  List.fold_left
+    (fun accu (t1,t2) ->
+       Trans.(|||) accu 
+	 (Trans.(&&&) (Trans.(!!!) (Fst (normalize t1)))
+	    (Trans.(!!!) (Snd (normalize t2))))
+    )
+    Trans.zero
+    (normalize_dnf (dnf_trans tr))
 
+let normalize t = (normalize t).descr
+
+(*
 let normalize2_memo = Memo.create 4096
 
 let rec normalize2 t =
@@ -462,8 +463,8 @@ and print_v_rest ppf = function
   | x -> Format.fprintf ppf ",%a" print_v x
 
 
-let elt i t1 t2 =
-  inter (tag i) (inter (fst t1) (snd t2))
+let anyelt t1 t2 = inter (fst t1) (snd t2)
+let elt i t1 t2 = inter (tag i) (anyelt t1 t2)
 
 let rec singleton = function
   | Eps -> eps

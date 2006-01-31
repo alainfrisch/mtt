@@ -14,6 +14,7 @@ rule token = parse
   | lowercase identchar* {
       match Lexing.lexeme lexbuf with
 	| "let" -> LET
+	| "letn" -> LETN
 	| "in" -> IN
 	| "if" -> IF
 	| "then" -> THEN

@@ -1,0 +1,8 @@
+expr Pick =
+  if Copy in _[] then Copy
+  else if rand(Any) in () then _[/Copy] else !Pick
+
+type T = m[a[]],a[] | m[b[]],b[]
+
+infer (let a = Pick in m[a],a) in T
+infer (letn a = Pick in m[a],a) in T

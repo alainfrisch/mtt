@@ -3,7 +3,7 @@
 %token EQUAL COMMA COLON ARROW SEMICOLON
 %token EOF LBRACKET RBRACKET UNDERSCORE
 %token<int> INT
-%token LPAREN RPAREN LET IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL
+%token LPAREN RPAREN LET LETN IN LEFT RIGHT IF THEN ELSE PIPE AMPERSAND DASH INFER RAND CHECK EVAL
 
 %right PIPE DASH
 %right AMPERSAND
@@ -26,6 +26,7 @@ phrase:
 
 typ:
  | LPAREN RPAREN { Syntax.Type.Eps }
+ | UNDERSCORE LBRACKET typ_opt RBRACKET typ_rest { Syntax.Type.AnyElt ($3,$5) }
  | LIDENT LBRACKET typ_opt RBRACKET typ_rest { Syntax.Type.Elt ($1,$3,$5) }
  | UIDENT { Syntax.Type.Ident $1 }
  | typ AMPERSAND typ { Syntax.Type.And ($1,$3) }
@@ -45,6 +46,7 @@ expr:
  | LIDENT { Syntax.Expr.Var $1 }
  | UIDENT { Syntax.Expr.Ident $1 }
  | LET LIDENT EQUAL expr IN expr { Syntax.Expr.Let ($2,$4,$6) }
+ | LETN LIDENT EQUAL expr IN expr { Syntax.Expr.LetN ($2,$4,$6) }
  | LEFT expr { Syntax.Expr.Left $2 }
  | RIGHT expr { Syntax.Expr.Right $2 }
  | IF expr IN typ THEN expr ELSE expr { Syntax.Expr.Cond ($2,$4,$6,$8) }

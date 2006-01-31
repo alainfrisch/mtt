@@ -3,6 +3,7 @@ module Type = struct
     | Ident of string
     | Eps
     | Elt of string * t * t
+    | AnyElt of t * t
     | And of t * t
     | Or of t * t
     | Diff of t * t
@@ -14,6 +15,7 @@ module Expr = struct
     | Random of Type.t
     | Var of string
     | Let of string * t * t
+    | LetN of string * t * t
     | Left of t
     | Right of t
     | Cond of t * Type.t * t * t
@@ -49,6 +51,8 @@ let parse prog =
     | Type.Eps -> Ta.eps
     | Type.Elt (x,t1,t2) ->
 	Ta.elt (Ta.atom_of_string x) (parse_type_node t1) (parse_type_node t2)
+    | Type.AnyElt (t1,t2) ->
+	Ta.anyelt (parse_type_node t1) (parse_type_node t2)
     | Type.And (t1,t2) -> Ta.inter (parse_type g t1) (parse_type g t2)
     | Type.Or (t1,t2) -> Ta.union (parse_type g t1) (parse_type g t2)
     | Type.Diff (t1,t2) -> Ta.diff (parse_type g t1) (parse_type g t2)
@@ -89,6 +93,8 @@ let parse prog =
 	ex (Mtt.ERand t)
     | Expr.Let (x,e1,e2) -> 
 	ex (Mtt.ELet (Mtt.var_of_string x, parse_expr g e1, parse_expr g e2))
+    | Expr.LetN (x,e1,e2) -> 
+	ex (Mtt.ELetCbn (Mtt.var_of_string x, parse_expr g e1, parse_expr g e2))
     | Expr.Left e -> 
 	ex (Mtt.ESub (Mtt.Fst, parse_expr_node e))
     | Expr.Right e -> 

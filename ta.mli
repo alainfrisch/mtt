@@ -23,6 +23,7 @@ val eps: t
 val fst: node -> t  (** Any pair whose first component is as given. *)
 val snd: node -> t  (** Any pair whose second component is as given. *)
 val elt: atom -> node -> node -> t
+val anyelt: node -> node -> t
 val tag: atom -> t
 val nottag: atom -> t
 val noneps: t
@@ -33,6 +34,7 @@ val tag_not_in: Pt.Set.t -> t
 val mk: unit -> node
 val def: node -> t -> unit
 val get: node -> t
+val uid: node -> int
 
 val is_defined: t -> bool
 
@@ -58,3 +60,5 @@ val print_v:  Format.formatter -> v -> unit
 
 
 val singleton: v -> t
+
+val normalize: t -> t
