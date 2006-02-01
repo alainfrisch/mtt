@@ -15,8 +15,8 @@ T ::=
     |  X            Recursion variable (identifier starting with uppercase)
     |  (T)          Syntactical grouping
 
-Loops in types must cross an element constructor. Boolean connective
-& and - cannot appear under reguler expression constructor
+Loops in types must cross an element constructor. Boolean connectives
+& and - cannot appear under regular expression constructors
 (sequence, repetition).
 
 
@@ -24,8 +24,9 @@ Syntax of transducers:
 
 E ::=  
     |  ()           Empty sequence
-    |  a[E],E       Element
-    |  _[E],E       Element, copy tag from the input
+    |  a[E]         Element
+    |  _[E]         Element, copy tag from the input
+    |  E,E          Concatenation
     |  /E           Move to the sequence of children of the first element
     |  !E           Move to the next element
     |  if E in T then E else E      Conditional
@@ -50,7 +51,7 @@ itself.
 The /E, !E and _[E],E transducers fail when the input is the empty sequence.
 
 Values V are defined as the subset of transducers where only the
-empty sequence and the element constructors are allowed.
+empty sequence, the element and the concatenation constructors are allowed.
 
 
 Syntax of phrases:
