@@ -15,7 +15,7 @@ let eval ppf (e,v) =
 
 let infer ppf (e,t) = 
   let s = Mtt.infer Mtt.Env.empty e t () in
-  Format.fprintf ppf "inferred input:%a@." Ta.print (Ta.normalize s)
+  Format.fprintf ppf "inferred input:%a@." Ta.print ((*Ta.normalize*) s)
 
 let check ppf (e,t1,t2) = 
   let s = Mtt.infer Mtt.Env.empty e t2 () in

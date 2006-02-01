@@ -8,18 +8,4 @@ infer (let a = Pick in m[a],a) in T
 infer (letn a = Pick in m[a],a) in T
 
 
-expr Append(tl) =
-  if Copy in () then tl
-  else (_[/Copy],!Append(tl))
 
-expr Concat(l1;l2) = (l1; Append(l2))
-
-eval (c[],d[]; Concat(a[],b[];Copy))
-
-expr Flatten =
-  if Copy in () then ()
-  else _[],/Flatten,!Flatten
-
-eval (a[b[],c[]],d[e[]]; Flatten)
-
-infer Flatten in a[],b[]

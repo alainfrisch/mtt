@@ -40,7 +40,7 @@ parser.ml: parser.mly
 lexer.ml: lexer.mll
 	ocamllex $<
 
-PACKAGE=mtt-0.1
+PACKAGE=mtt-0.2
 PACK_FILES=\
  Makefile .depend *.ml *.mli *.mly *.mll *.mtt \
  CHANGES LICENSE README SPECIF

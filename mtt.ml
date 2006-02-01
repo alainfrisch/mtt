@@ -37,6 +37,20 @@ and expr_descr =
   | ECompose of expr * expr
   | EError
 
+let rec print_expr ppf e = match e.descr with
+  | EVal _ -> Format.fprintf ppf "Val"
+  | EElt _ -> Format.fprintf ppf "Elt"
+  | ECopyTag _ -> Format.fprintf ppf "CopyTag"
+  | ECopy -> Format.fprintf ppf "Copy"
+  | EVar _ -> Format.fprintf ppf "Var"
+  | ELet (_,e) -> Format.fprintf ppf "Let(%a)" print_expr e
+  | ELetN _ -> Format.fprintf ppf "LetN"
+  | ECond _ -> Format.fprintf ppf "Cond"
+  | ERand _ -> Format.fprintf ppf "Rand"
+  | ESub _ -> Format.fprintf ppf "Sub"
+  | ECompose _ -> Format.fprintf ppf "Compose"
+  | EError -> Format.fprintf ppf "Error"
+
 module Input = struct
   type t = (Ta.t * Ta.t list) Env.t * int * Ta.t
 
@@ -61,6 +75,11 @@ module Input = struct
   let equal (env1,e1,t1) (env2,e2,t2) =
     (e1 == e2) && (Env.equal equal_x env1 env2) && (Ta.equal t1 t2)
 end
+
+let print_env ppf env =
+  Env.iter (fun i (t,_) ->
+	      Format.fprintf ppf "%s:%a@." (string_of_var i) Ta.print t)
+    env
 
 type res = Type of Ta.t | Exn of exn
 
@@ -109,7 +128,18 @@ let rec infer env e t () =
   if Ta.is_empty t then Ta.empty
   else  
     let i = (env,e.uid,t) in
-    try match Memo.find infer_memo i with Type t -> t | Exn exn -> raise exn
+    try 
+      let r = 
+	match Memo.find infer_memo i with Type t -> t | Exn exn -> raise exn
+      in
+      let r = 
+	if is_empty r then Ta.empty 
+	else if is_any r then Ta.any
+	else if is_noneps r then Ta.noneps
+	else if is_eps r then Ta.eps else r in
+      Memo.replace infer_memo i (Type r);
+      r
+     
     with Not_found -> 
       try 
 	let r = infer_descr env i e t in 
@@ -118,6 +148,9 @@ let rec infer env e t () =
 	  else if is_any r then Ta.any
 	  else if is_noneps r then Ta.noneps
 	  else if is_eps r then Ta.eps else r in
+	Format.fprintf Format.std_formatter
+	  "Infer for expr %i(%a), output %a%a===>%a-----------------@."
+	  e.uid print_expr e Ta.print t print_env env Ta.print r;
 	Memo.replace infer_memo i (Type r);
 	infer_stack := i :: !infer_stack;
 	r
