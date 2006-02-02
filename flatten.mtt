@@ -1,6 +1,5 @@
 (* Two different ways to simulate the concatenation *)
 
-
 (* 1. We introduce symbolic binary concatenation open[_],_ in the output and
       then remove it in a post-processing part. *)
 

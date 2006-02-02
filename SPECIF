@@ -24,9 +24,8 @@ Syntax of transducers:
 
 E ::=  
     |  ()           Empty sequence
-    |  a[E]         Element
-    |  _[E]         Element, copy tag from the input
-    |  E,E          Concatenation
+    |  a[E],E       Element
+    |  _[E],E       Element, copy tag from the input
     |  /E           Move to the sequence of children of the first element
     |  !E           Move to the next element
     |  if E in T then E else E      Conditional
@@ -45,8 +44,8 @@ B ::= x = E and ... and x = E
 
 
 Loops in transducers must cross a ! or / constructor. There can be no loop
-between the right-hand side E2 of composition (E1;E2) and the composition
-itself.
+between the left-hand side E2 of composition (E1;E2) and the composition
+itself. Moreover, E1 must be closed (no free variables).
 
 The /E, !E and _[E],E transducers fail when the input is the empty sequence.
 

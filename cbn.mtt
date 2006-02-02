@@ -1,11 +1,21 @@
+(* Illustrate the difference between call-by-name and call-by-value. *)
+
 expr Pick =
   if Copy in _[] then Copy
   else if rand(Any) in () then _[/Copy] else !Pick
+(* pick a random element from the input sequence. *)
 
 type T = m[a[]],a[] | m[b[]],b[]
 
 infer (let a = Pick in m[a],a) in T
-infer (letn a = Pick in m[a],a) in T
+  (* In call-by-value, the random element is choosen once.
+     The valid input is (a[]|b[])* 
+   *) 
 
+infer (letn a = Pick in m[a],a) in T
+  (* In call-by-value, the random element is choosen each time the accumulator
+     a is used.
+     The valid input is (a[]* | b[]*)
+   *)
 
 

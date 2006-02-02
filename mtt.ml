@@ -433,7 +433,7 @@ let check_compose e =
   match e.descr with
     | ECompose (e1,e2) -> 
 	(try 
-(*	   if not (VarSet.is_empty (fv e2)) then raise Exit;*)
+	   if not (VarSet.is_empty (fv e1)) then raise Exit;
 	   iter_expr_deep (fun e' -> if e == e' then raise Exit) e1
 	 with Exit ->
 	   Printf.eprintf "Ill-formed composition\n"; exit 1)

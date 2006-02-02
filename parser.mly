@@ -63,12 +63,15 @@ expr:
  | RIGHT expr { Syntax.Expr.Right $2 }
  | IF expr IN typ THEN expr ELSE expr { Syntax.Expr.Cond ($2,$4,$6,$8) }
  | LPAREN expr RPAREN { $2 }
- | LIDENT LBRACKET expr_opt RBRACKET { Syntax.Expr.Elt ($1,$3) }
- | UNDERSCORE LBRACKET expr_opt RBRACKET { Syntax.Expr.CopyTag ($3) }
+ | LIDENT LBRACKET expr_opt RBRACKET expr_rest { Syntax.Expr.Elt ($1,$3,$5) }
+ | UNDERSCORE LBRACKET expr_opt RBRACKET expr_rest { Syntax.Expr.CopyTag ($3,$5) }
  | RAND LPAREN typ RPAREN { Syntax.Expr.Random $3 }
  | LPAREN RPAREN { Syntax.Expr.Eps }
  | LPAREN expr SEMICOLON expr RPAREN { Syntax.Expr.Compose ($2,$4) }
- | expr COMMA expr { Syntax.Expr.Concat ($1,$3) }
+
+expr_rest:
+ | { Syntax.Expr.Eps }
+ | COMMA expr { $2 }
 
 bindings:
  | LIDENT EQUAL expr AND bindings { ($1,$3)::$5 }

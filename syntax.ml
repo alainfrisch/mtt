@@ -23,10 +23,9 @@ module Expr = struct
     | Right of t
     | Cond of t * Type.t * t * t
     | Eps
-    | Elt of string * t
-    | CopyTag of t
+    | Elt of string * t * t
+    | CopyTag of t * t
     | Compose of t * t
-    | Concat of t * t
 end
 
 module Phrase = struct
@@ -91,25 +90,6 @@ let parse prog =
     | Type.Diff _ ->
 	Printf.eprintf "Operator cannot be used within regular expression";
 	exit 1
-(*
-
-  let rec parse_type g = function
-    | Type.Ident "Any" -> Ta.any
-    | Type.Ident "Empty" -> Ta.empty
-    | Type.Ident x when List.mem x g ->
-	Printf.eprintf "Unguarded recursion on type %s\n" x; exit 1
-    | Type.Ident x when not (Hashtbl.mem types x) ->
-	Printf.eprintf "Cannot resolve type %s\n" x; exit 1
-    | Type.Ident x -> parse_type (x::g) (Hashtbl.find types x)
-    | Type.Eps -> Ta.eps
-    | Type.Elt (x,t1,t2) ->
-	Ta.elt (Ta.atom_of_string x) (parse_type_node t1) (parse_type_node t2)
-    | Type.AnyElt (t1,t2) ->
-	Ta.anyelt (parse_type_node t1) (parse_type_node t2)
-    | Type.And (t1,t2) -> Ta.inter (parse_type g t1) (parse_type g t2)
-    | Type.Or (t1,t2) -> Ta.union (parse_type g t1) (parse_type g t2)
-    | Type.Diff (t1,t2) -> Ta.diff (parse_type g t1) (parse_type g t2)
-*)
 
   and parse_type_node e =
     try Hashtbl.find type_nodes e
@@ -138,15 +118,8 @@ let parse prog =
 
   let ex d = 
     incr expr_id; { Mtt.uid = !expr_id; Mtt.descr = d; Mtt.fv = None } in
-  let eeps = ex (Mtt.EVal Ta.Eps) in
 
-
-(*  let ecopyq = ex Mtt.ECopy in
-  econcat.Mtt.descr <-
-    Mtt.ECond (ecopy, Ta.eps, ex (Mtt.EVar (Mtt.var_of_string "#")),
-	       ex (Mtt.ECopyTag (ex (Mtt.ESub (Mtt.Fst, ecopy)), 
-				 ex (Mtt.ESub (Mtt.Snd, ecopyq)))));
-*)
+  (* TODO: check well-formedness of expressions. *)
   let rec parse_expr g e =
     try Hashtbl.find exprs_nodes e
     with Not_found ->
@@ -172,14 +145,10 @@ let parse prog =
 	  let binds = List.map2 (fun x e -> (x,parse_expr g e)) params args in
 	  Mtt.ELet (binds, parse_expr (x::g) body)
     | Expr.Eps -> Mtt.EVal Ta.Eps
-    | Expr.Concat (Expr.Elt (x,e1), e2) -> 
+    | Expr.Elt (x,e1, e2) -> 
 	Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, parse_expr g e2)
-    | Expr.Concat (Expr.CopyTag e1, e2) -> 
+    | Expr.CopyTag (e1, e2) -> 
 	Mtt.ECopyTag (parse_expr g e1, parse_expr g e2)
-    | Expr.Elt (x,e1) ->
-	Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, eeps)
-    | Expr.CopyTag e1 -> 
-	Mtt.ECopyTag (parse_expr g e1, eeps)
     | Expr.Var x -> Mtt.EVar (Mtt.var_of_string x)
     | Expr.Random t -> 
 	let t = parse_type [] t in
@@ -199,12 +168,6 @@ let parse prog =
 		       parse_expr g e1, parse_expr g e2)
     | Expr.Compose (e1,e2) ->
 	Mtt.ECompose (parse_expr g e1, parse_expr g e2)
-    | Expr.Concat (e1,e2) ->
-	assert false
-(*
-	ex (Mtt.ELet ([Mtt.var_of_string "#", parse_expr g e2],
-		      parse_expr_q g e1))
-*)
 
   and parse_bindings g binds =
     List.map (fun (x,e) -> Mtt.var_of_string x, parse_expr g e) binds
@@ -212,20 +175,6 @@ let parse prog =
   and parse_expr_node e =
     parse_expr [] e
   in
-
-(*
-  let parse_val e =
-    let rec aux e = match e.Mtt.descr with
-      | Mtt.EVal v -> v
-      | Mtt.EElt (i,e1,e2) -> Ta.Elt (i, aux e1, aux e2)
-      | _ -> 
-	  (Printf.eprintf "Not a value\n"; exit 1);
-    in
-    aux (parse_expr [] e)
-  in
-*)
-
-
 
   let cmds = ref [] in
   List.iter 
