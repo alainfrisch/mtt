@@ -37,6 +37,7 @@ val get: node -> t
 val uid: node -> int
 
 val is_defined: t -> bool
+val is_defined_node: node -> bool
 
 (** Emptyness check. *)
 exception Undefined
@@ -62,3 +63,4 @@ val print_v:  Format.formatter -> v -> unit
 val singleton: v -> t
 
 val normalize: t -> t
+val normalize2: t -> t

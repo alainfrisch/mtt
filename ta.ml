@@ -334,6 +334,8 @@ let print ppf t =
   let l = ref [] in
   let p = ref [] in
   let rec descr t =
+    if (try is_empty t with Undefined -> false) then Format.fprintf ppf "Empty"
+    else
     let first = ref true in
     let sep () = if !first then first := false else Format.fprintf ppf " | " in
     if t.eps then (sep (); Format.fprintf ppf "()");
@@ -404,9 +406,6 @@ let normalize_memo = Memo.create 4096
 let rec normalize t =
   try Memo.find normalize_memo t
   with Not_found ->
-(*    Format.fprintf Format.std_formatter "Normalize (uid=%i):%a@." 
-      (Trans.uid t.trans)
-      print t; *)
     let n = mk () in
     Memo.add normalize_memo t n;
     def n (typ t.eps (Pt.Map.map norm_aux t.trans) (norm_aux t.def));
@@ -422,9 +421,33 @@ and norm_aux tr =
        Trans.(|||) accu (Trans.(&&&) t1 t2)
     )
     Trans.zero
-    (normalize_dnf (dnf_trans tr))
+    ((*normalize_dnf*) (dnf_trans tr))
 
 let normalize t = (normalize t).descr
+
+let normalize2_memo = Memo.create 4096
+
+let rec normalize2 t =
+  try Memo.find normalize2_memo t
+  with Not_found ->
+    let n = mk () in
+    Memo.add normalize2_memo t n;
+    def n (typ t.eps (Pt.Map.map norm_aux t.trans) (norm_aux t.def));
+    n
+and norm_aux tr =
+  List.fold_left
+    (fun accu (t1,t2) ->
+       let t1 = 
+	 if is_any t1 then Trans.one else Trans.(!!!) (Fst (normalize2 t1))
+       and t2 = 
+	 if is_any t2 then Trans.one else Trans.(!!!) (Snd (normalize2 t2))
+       in
+       Trans.(|||) accu (Trans.(&&&) t1 t2)
+    )
+    Trans.zero
+    (normalize_dnf (dnf_trans tr))
+
+let normalize2 t = (normalize2 (normalize t)).descr
 
 (*
 let normalize2_memo = Memo.create 4096
@@ -488,3 +511,6 @@ let is_defined t =
   in
   try check_t t; true
   with Exit -> false
+
+let is_defined_node n =
+  not (n.undef) && (is_defined (get n))

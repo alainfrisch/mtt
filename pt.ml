@@ -652,10 +652,9 @@ let rec diff f t1 t2 = match (t1,t2) with
 
 
 let rec restrict t1 t2 = match (t1,t2) with
-  | t, Set.Empty -> t
-  | Empty, _ -> Empty
-  | Leaf (k,x), _ -> if Set.mem k t2 then Empty else t1
-  | _, Set.Leaf k -> remove k t1
+  | _, Set.Empty | Empty, _ -> Empty
+  | Leaf (k,x), _ -> if Set.mem k t2 then t1 else Empty
+  | _, Set.Leaf k -> (try Leaf (k, find k t1) with Not_found -> Empty)
   | (Branch (p,m,s0,s1) as s), (Set.Branch (q,n,t0,t1) as t) ->
       if m == n && match_prefix q p m then
 	branch (p,m,restrict s0 t0,restrict s1 t1)
@@ -672,7 +671,7 @@ let rec restrict t1 t2 = match (t1,t2) with
 	else 
 	  restrict s t1
       else
-	s
+	Empty
 
 let rec combine f d1 d2 t1 t2 = match (t1,t2) with
   | t, Empty -> map (fun x -> f x d2) t

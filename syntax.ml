@@ -132,24 +132,33 @@ let parse prog =
     | Type.Diff (t1,t2) -> Ta.diff (parse_type g t1) (parse_type g t2)
     | t -> ReComp.compile (parse_regexp g t) in
 
-  let expr_nodes = Hashtbl.create 256 in
+  let exprs_nodes = Hashtbl.create 256 in
   let expr_id = ref 0 in
   let composes = ref [] in
 
-  let ex d = incr expr_id; { Mtt.uid = !expr_id; Mtt.descr = d } in
-  let ecopy = ex Mtt.ECopy in
+  let ex d = 
+    incr expr_id; { Mtt.uid = !expr_id; Mtt.descr = d; Mtt.fv = None } in
   let eeps = ex (Mtt.EVal Ta.Eps) in
-  let eerror = ex (Mtt.EError) in
 
-  let econcat = ex Mtt.ECopy in
+
+(*  let ecopyq = ex Mtt.ECopy in
   econcat.Mtt.descr <-
     Mtt.ECond (ecopy, Ta.eps, ex (Mtt.EVar (Mtt.var_of_string "#")),
 	       ex (Mtt.ECopyTag (ex (Mtt.ESub (Mtt.Fst, ecopy)), 
-				 ex (Mtt.ESub (Mtt.Snd, econcat)))));
-
-  let rec parse_expr g = function
-    | Expr.Call ("Copy",[]) -> ecopy
-    | Expr.Call ("Error",[]) -> eerror
+				 ex (Mtt.ESub (Mtt.Snd, ecopyq)))));
+*)
+  let rec parse_expr g e =
+    try Hashtbl.find exprs_nodes e
+    with Not_found ->
+      let n = ex Mtt.ECopy in
+      Hashtbl.add exprs_nodes e n;
+      let d = parse_expr_descr g e in
+      n.Mtt.descr <- d;
+      (match d with Mtt.ECompose _ -> composes := n :: !composes | _ -> ());
+      n
+  and parse_expr_descr g = function
+    | Expr.Call ("Copy",[]) -> Mtt.ECopy
+    | Expr.Call ("Error",[]) -> Mtt.EError
     | Expr.Call (x,_) when List.mem x g ->
 	Printf.eprintf "Unguarded recursion on expression %s\n" x; exit 1
     | Expr.Call (x,_) when not (Hashtbl.mem exprs x) ->
@@ -158,55 +167,50 @@ let parse prog =
 	let (params,body) = Hashtbl.find exprs x in
 	if List.length params != List.length args then
 	  (Printf.eprintf "Arity mismatch on call to %s\n" x; exit 1);
-	let body = parse_expr (x::g) body in
-	if params == [] then body
+	if params == [] then parse_expr_descr (x::g) body
 	else
 	  let binds = List.map2 (fun x e -> (x,parse_expr g e)) params args in
-	  ex (Mtt.ELet (binds, body))
-    | Expr.Eps -> eeps
+	  Mtt.ELet (binds, parse_expr (x::g) body)
+    | Expr.Eps -> Mtt.EVal Ta.Eps
     | Expr.Concat (Expr.Elt (x,e1), e2) -> 
-	ex (Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, parse_expr g e2))
+	Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, parse_expr g e2)
     | Expr.Concat (Expr.CopyTag e1, e2) -> 
-	ex (Mtt.ECopyTag (parse_expr g e1, parse_expr g e2))
+	Mtt.ECopyTag (parse_expr g e1, parse_expr g e2)
     | Expr.Elt (x,e1) ->
-	ex (Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, eeps))
+	Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, eeps)
     | Expr.CopyTag e1 -> 
-	ex (Mtt.ECopyTag (parse_expr g e1, eeps))
-    | Expr.Var x -> ex (Mtt.EVar (Mtt.var_of_string x))
+	Mtt.ECopyTag (parse_expr g e1, eeps)
+    | Expr.Var x -> Mtt.EVar (Mtt.var_of_string x)
     | Expr.Random t -> 
 	let t = parse_type [] t in
 	if Ta.is_empty t then
 	  (Printf.eprintf "Cannot rand(_) an empty type\n"; exit 1);
-	ex (Mtt.ERand t)
+	Mtt.ERand t
     | Expr.Let (binds,e2) -> 
-	ex (Mtt.ELet (parse_bindings g binds, parse_expr g e2))
+	Mtt.ELet (parse_bindings g binds, parse_expr g e2)
     | Expr.LetN (binds,e2) -> 
-	ex (Mtt.ELetN (parse_bindings g binds, parse_expr g e2))
+	Mtt.ELetN (parse_bindings g binds, parse_expr g e2)
     | Expr.Left e -> 
-	ex (Mtt.ESub (Mtt.Fst, parse_expr_node e))
+	Mtt.ESub (Mtt.Fst, parse_expr_node e)
     | Expr.Right e -> 
-	ex (Mtt.ESub (Mtt.Snd, parse_expr_node e))
+	Mtt.ESub (Mtt.Snd, parse_expr_node e)
     | Expr.Cond (e,t,e1,e2) ->
-	ex (Mtt.ECond (parse_expr g e, parse_type [] t,
-		       parse_expr g e1, parse_expr g e2))
+	Mtt.ECond (parse_expr g e, parse_type [] t,
+		       parse_expr g e1, parse_expr g e2)
     | Expr.Compose (e1,e2) ->
-	let r = ex (Mtt.ECompose (parse_expr g e1, parse_expr g e2)) in
-	composes := r :: !composes;
-	r
+	Mtt.ECompose (parse_expr g e1, parse_expr g e2)
     | Expr.Concat (e1,e2) ->
+	assert false
+(*
 	ex (Mtt.ELet ([Mtt.var_of_string "#", parse_expr g e2],
-		      ex (Mtt.ECompose (parse_expr g e1, econcat))))
+		      parse_expr_q g e1))
+*)
 
   and parse_bindings g binds =
     List.map (fun (x,e) -> Mtt.var_of_string x, parse_expr g e) binds
 
   and parse_expr_node e =
-    try Hashtbl.find expr_nodes e
-    with Not_found ->
-      let n = ex Mtt.ECopy in
-      Hashtbl.add expr_nodes e n;
-      n.Mtt.descr <- (parse_expr [] e).Mtt.descr;
-      n
+    parse_expr [] e
   in
 
 (*

@@ -1,0 +1,32 @@
+(* Two different ways to simulate the concatenation *)
+
+
+(* 1. We introduce symbolic binary concatenation open[_],_ in the output and
+      then remove it in a post-processing part. *)
+
+expr Flatten = 
+ if Copy in () then ()
+ else open[/Flatten],_[],!Flatten
+
+expr Post =
+ if Copy in () then q
+ else if Copy in open[Any],Any then let q = !Post in /Post
+ else _[/PostProcess],!Post
+
+expr PostProcess = let q = () in Post
+
+type T = (_[T])* - (Any,open[Any],Any)
+   (* This is the type of real inputs. *)
+
+expr E1 = if Copy in T then (Flatten ; PostProcess) else Error
+
+
+(* 2. Using an accumulator *)
+
+expr Flatten2 =
+  if Copy in () then q
+  else let q = _[],!Flatten2 in /Flatten2
+
+expr E2 = let q = () in Flatten2
+
+infer E2 in a[]*,b[]*

@@ -49,6 +49,7 @@ rule token = parse
   | "*"  { STAR }
   | "+"  { PLUS }
   | "@"  { AT }
+  | "-"  { DASH }
   | eof { EOF }
 
 and comment depth = parse

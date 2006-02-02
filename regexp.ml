@@ -81,12 +81,12 @@ and compile l =
 	  match l with
 	    | [] -> tr := X.union !tr X.eps
 	    | [Any] -> tr := X.any
-	    | Any :: rest -> aux rest; tr := X.union !tr (X.snd (nod_of rest))
+	    | Any :: rest -> aux rest; tr := X.union !tr (X.snd (nod_of l))
 	    | Eps :: rest -> aux rest
 	    | Elem x :: rest -> tr := X.union !tr (X.elt x (nod_of rest))
 	    | Seq (r1,r2) :: rest -> aux (r1 :: r2 :: rest)
 	    | Alt (r1,r2) :: rest -> aux (r1 :: rest); aux (r2 :: rest)
-	    | Star r :: rest -> aux (r :: Star r :: rest); aux rest
+	    | Star r :: rest -> aux (r :: l); aux rest
 	    | Plus r :: rest -> aux (r :: Star r :: rest))
   in
   aux l;
