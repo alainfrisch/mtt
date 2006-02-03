@@ -11,10 +11,12 @@ expr Trash =
    if Copy in () then q
    else _[/Copy],!Trash
 
-type Doc = doc[ mbox[Mails], trash[Mails] ]
+type Doc = doc[ mbox[(Mail|Spam)], trash[(Mail|Spam)*] ]
+type Mail = mail[content[]]
+type Spam = spam[Mail*]
 type Mails = (mail[Any] | spam[Any])*
 
-type CleanDoc = doc[ mbox[mail[Any]*], trash[Mails] ]
+type CleanDoc = doc[ mbox[Mail*], trash[(Mail|Spam)*] ]
 
 (*
 eval (doc[mbox[mail[a[]],spam[b[]],mail[mail[c[]]]],trash[d[]]] ; Spam2Trash)
