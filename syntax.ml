@@ -115,6 +115,7 @@ let parse prog =
   let exprs_nodes = Hashtbl.create 256 in
   let expr_id = ref 0 in
   let composes = ref [] in
+  let loops = ref [] in
 
   let ex d = 
     incr expr_id; { Mtt.uid = !expr_id; Mtt.descr = d; Mtt.fv = None } in
@@ -124,6 +125,7 @@ let parse prog =
     try Hashtbl.find exprs_nodes e
     with Not_found ->
       let n = ex Mtt.ECopy in
+      loops := n :: !loops;
       Hashtbl.add exprs_nodes e n;
       let d = parse_expr_descr g e in
       n.Mtt.descr <- d;
@@ -195,7 +197,6 @@ let parse prog =
 	 | `Eval e1 ->
 	     `Eval (parse_expr [] e1, Ta.Eps)
       ) !cmds in
-  List.iter
-    Mtt.check_compose
-    !composes;
+  List.iter Mtt.check_wf !loops;
+  List.iter Mtt.check_compose !composes;
   p

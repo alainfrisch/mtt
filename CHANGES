@@ -1,9 +1,8 @@
-0.2 (2006-02-01)
+0.2 (2006-02-02)
  * Add the _[T],T type
  * Call-by-name local binding
  * Function-call syntax
  * Normalization of the result of type inference
  * Switch to a regexp-based syntax for types
- * Concatenation  (going to mfts instead of mtts)
 
 0.1 (2006-01-28), initial release

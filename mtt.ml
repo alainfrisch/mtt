@@ -438,3 +438,14 @@ let check_compose e =
 	 with Exit ->
 	   Printf.eprintf "Ill-formed composition\n"; exit 1)
     | _ -> assert false
+
+let check_wf e0 =
+  let rec aux e =
+    iter_expr
+      (fun e -> 
+	 match e.descr with ESub _ -> () 
+	   | _ -> if e == e0 then raise Exit; aux e
+      ) e
+  in
+  try aux e0
+  with Exit -> Printf.eprintf "Unguarded recursion\n"; exit 1

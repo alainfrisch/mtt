@@ -1,0 +1,25 @@
+expr Spam2Trash = /doc[ mbox[ /Mail ], trash[ let q = /Spam in !/Trash ] ]
+expr Mail =
+   if Copy in () then ()
+   else if Copy in spam[Any],Any then !Mail
+   else _[/Copy],!Mail
+expr Spam =
+   if Copy in () then ()
+   else if Copy in spam[Any],Any then _[/Copy],!Spam
+   else !Spam
+expr Trash =
+   if Copy in () then q
+   else _[/Copy],!Trash
+
+type Doc = doc[ mbox[Mails], trash[Mails] ]
+type Mails = (mail[Any] | spam[Any])*
+
+type CleanDoc = doc[ mbox[mail[Any]*], trash[Mails] ]
+
+(*
+eval (doc[mbox[mail[a[]],spam[b[]],mail[mail[c[]]]],trash[d[]]] ; Spam2Trash)
+*)
+check Spam2Trash: Doc -> CleanDoc
+(*
+infer Spam2Trash in CleanDoc
+*)

@@ -15,7 +15,7 @@ infer (let a = Pick in m[a],a) in T
 infer (letn a = Pick in m[a],a) in T
   (* In call-by-value, the random element is choosen each time the accumulator
      a is used.
-     The valid input is (a[]* | b[]*)
+     The valid input is ( a[]* | b[]* )
    *)
 
 
