@@ -1,0 +1,24 @@
+type I = (a[I] | b[I])*
+type O = a[O]*, (c[ b[O]+ ], a[O]+)*, (c[ b[O]+ ] | ())
+
+(* Group consecutive b[]'s under a c[...] tag *)
+
+expr Group =
+  if Copy in () then ()
+  else if Copy in b[Any],Any 
+  then c[ Extract ], !Drop
+  else _[ /Group ], !Group
+
+expr Extract =
+  if Copy in b[Any],Any 
+  then _[ /Group ], !Extract
+  else ()
+
+expr Drop =
+  if Copy in b[Any], Any
+  then !Drop
+  else Group
+
+eval (b[],a[],b[],b[b[],a[],b[b[]]]; Group)
+
+check Group: I -> O

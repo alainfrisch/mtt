@@ -121,13 +121,13 @@ let parse prog =
     incr expr_id; { Mtt.uid = !expr_id; Mtt.descr = d; Mtt.fv = None } in
 
   (* TODO: check well-formedness of expressions. *)
-  let rec parse_expr g e =
+  let rec parse_expr e =
     try Hashtbl.find exprs_nodes e
     with Not_found ->
       let n = ex Mtt.ECopy in
       loops := n :: !loops;
       Hashtbl.add exprs_nodes e n;
-      let d = parse_expr_descr g e in
+      let d = parse_expr_descr [] e in
       n.Mtt.descr <- d;
       (match d with Mtt.ECompose _ -> composes := n :: !composes | _ -> ());
       n
@@ -144,13 +144,13 @@ let parse prog =
 	  (Printf.eprintf "Arity mismatch on call to %s\n" x; exit 1);
 	if params == [] then parse_expr_descr (x::g) body
 	else
-	  let binds = List.map2 (fun x e -> (x,parse_expr g e)) params args in
-	  Mtt.ELet (binds, parse_expr (x::g) body)
+	  let binds = List.map2 (fun x e -> (x,parse_expr e)) params args in
+	  Mtt.ELet (binds, parse_expr body)
     | Expr.Eps -> Mtt.EVal Ta.Eps
     | Expr.Elt (x,e1, e2) -> 
-	Mtt.EElt (Ta.atom_of_string x, parse_expr g e1, parse_expr g e2)
+	Mtt.EElt (Ta.atom_of_string x, parse_expr e1, parse_expr e2)
     | Expr.CopyTag (e1, e2) -> 
-	Mtt.ECopyTag (parse_expr g e1, parse_expr g e2)
+	Mtt.ECopyTag (parse_expr e1, parse_expr e2)
     | Expr.Var x -> Mtt.EVar (Mtt.var_of_string x)
     | Expr.Random t -> 
 	let t = parse_type [] t in
@@ -158,24 +158,24 @@ let parse prog =
 	  (Printf.eprintf "Cannot rand(_) an empty type\n"; exit 1);
 	Mtt.ERand t
     | Expr.Let (binds,e2) -> 
-	Mtt.ELet (parse_bindings g binds, parse_expr g e2)
+	Mtt.ELet (parse_bindings binds, parse_expr e2)
     | Expr.LetN (binds,e2) -> 
-	Mtt.ELetN (parse_bindings g binds, parse_expr g e2)
+	Mtt.ELetN (parse_bindings binds, parse_expr e2)
     | Expr.Left e -> 
 	Mtt.ESub (Mtt.Fst, parse_expr_node e)
     | Expr.Right e -> 
 	Mtt.ESub (Mtt.Snd, parse_expr_node e)
     | Expr.Cond (e,t,e1,e2) ->
-	Mtt.ECond (parse_expr g e, parse_type [] t,
-		       parse_expr g e1, parse_expr g e2)
+	Mtt.ECond (parse_expr e, parse_type [] t,
+		       parse_expr e1, parse_expr e2)
     | Expr.Compose (e1,e2) ->
-	Mtt.ECompose (parse_expr g e1, parse_expr g e2)
+	Mtt.ECompose (parse_expr e1, parse_expr e2)
 
-  and parse_bindings g binds =
-    List.map (fun (x,e) -> Mtt.var_of_string x, parse_expr g e) binds
+  and parse_bindings binds =
+    List.map (fun (x,e) -> Mtt.var_of_string x, parse_expr e) binds
 
   and parse_expr_node e =
-    parse_expr [] e
+    parse_expr e
   in
 
   let cmds = ref [] in
@@ -191,11 +191,11 @@ let parse prog =
     List.rev_map 
       (function
 	 | `Infer (e,t) -> 
-	     `Infer (parse_expr [] e, parse_type [] t)
+	     `Infer (parse_expr e, parse_type [] t)
 	 | `Check (e,t1,t2) -> 
-	     `Check (parse_expr [] e, parse_type [] t1, parse_type [] t2)
+	     `Check (parse_expr e, parse_type [] t1, parse_type [] t2)
 	 | `Eval e1 ->
-	     `Eval (parse_expr [] e1, Ta.Eps)
+	     `Eval (parse_expr e1, Ta.Eps)
       ) !cmds in
   List.iter Mtt.check_wf !loops;
   List.iter Mtt.check_compose !composes;

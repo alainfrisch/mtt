@@ -464,11 +464,14 @@ let check_compose e =
     | _ -> assert false
 
 let check_wf e0 =
+  let seen = ref Pt.Set.empty in
   let rec aux e =
     iter_expr
-      (fun e -> 
-	 match e.descr with ESub _ -> () 
-	   | _ -> if e == e0 then raise Exit; aux e
+      (fun e ->
+	 if Pt.Set.mem e.uid !seen then ()
+	 else (seen := Pt.Set.add e.uid !seen;
+	       match e.descr with ESub _ -> () 
+		 | _ -> if e == e0 then raise Exit; aux e)
       ) e
   in
   try aux e0
