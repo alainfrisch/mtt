@@ -1,3 +1,6 @@
+Since 0.2
+ * Random evaluation (iterate to find counter-example)
+
 0.2 (2006-02-02)
  * Add the _[T],T type
  * Call-by-name local binding

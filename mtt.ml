@@ -413,17 +413,25 @@ let rec eval env e v = match e.descr with
 	 | Ta.Elt (i,_,_) -> Ta.Elt (i, eval env e1 v, eval env e2 v))
   | ECopy -> v
   | EVar x -> 
-      (try Env.find x env
+      (try Env.find x env ()
        with Not_found ->
 	 raise Error)
-  | ELet (binds,e2) | ELetN (binds,e2) ->
+  | ELet (binds,e2) ->
       let env' = 
 	List.fold_left
-	  (fun env' (x,e1) -> Env.add x (eval env e1 v) env')
+	  (fun env' (x,v1) -> 
+	     let v1 = eval env e v in 
+	     Env.add x (fun () -> v1) env')
 	  env
 	  binds in
       eval env' e2 v
-  | ECond (e,t,e1,e2) ->
+  | ELetN (binds,e2) ->
+      let env' = 
+	List.fold_left
+	  (fun env' (x,e1) -> Env.add x (fun () -> eval env e1 v) env')
+	  env
+	  binds in
+      eval env' e2 v  | ECond (e,t,e1,e2) ->
       eval env (if Ta.is_in (eval env e v) t then e1 else e2) v
   | ERand t -> Ta.random_sample t
   | ESub (dir,e) ->
