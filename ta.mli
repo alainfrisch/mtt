@@ -1,6 +1,7 @@
 type atom = int
 
 val atom_of_string: string -> atom
+val string_of_atom: atom -> string
 
 type t
 val hash: t -> int
@@ -57,6 +58,7 @@ val dnf_neg_all: t -> Pt.Set.t * (t * t) list * (atom * (t * t) list) list
 val print: Format.formatter -> t -> unit
 
 val sample: t -> v
+val random_sample: t -> v
 val print_v:  Format.formatter -> v -> unit
 
 

@@ -6,7 +6,7 @@ let parse () =
     failwith (Format.sprintf "Syntax error at char %i" i)
 
 let eval ppf (e,v) = 
-   Format.fprintf ppf "possible output:";
+  Format.fprintf ppf "possible output:";
   try
     let v' = Mtt.eval e v in
     Format.fprintf ppf "%a@." Ta.print_v v';
@@ -22,7 +22,10 @@ let check ppf (e,t1,t2) =
   try
     let v = Ta.sample (Ta.diff t1 s) in
     Format.fprintf ppf "check failed. Invalid input:%a@." Ta.print_v v;
-    eval ppf (e,v)
+    try
+      let v' = Mtt.eval_avoid e v t2 in
+      Format.fprintf ppf "Invalid output:%a@." Ta.print_v v';
+    with Not_found -> Format.fprintf ppf "Couldn't find counter exemple.@."
   with Not_found -> Format.fprintf ppf "check passed.@."
 
 let ppf = Format.std_formatter

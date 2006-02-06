@@ -6,10 +6,15 @@ let tag_id = ref 0
 let atom_of_string x =
   try Hashtbl.find tags x
   with Not_found ->
+    let i = !tag_id in 
     incr tag_id;
-    Hashtbl.add tags x !tag_id;
-    Hashtbl.add rev_tags !tag_id x;
-    !tag_id
+    Hashtbl.add tags x i;
+    Hashtbl.add rev_tags i x;
+    i
+let string_of_atom x =
+  if x = -1 then "###"
+  else try Hashtbl.find rev_tags x
+  with Not_found -> assert false
 
 type 'a fstsnd = Fst of 'a | Snd of 'a
 type 'a descr = {
@@ -320,7 +325,7 @@ let dump_tr l ppf = function
 
 let print_tag ppf i = 
   try 
-    let s = Hashtbl.find rev_tags i in
+    let s = string_of_atom i in
     Format.fprintf ppf "%s" s
   with Not_found -> Format.fprintf ppf "%i" i
 
@@ -487,3 +492,11 @@ let is_defined t =
 
 let is_defined_node n =
   not (n.undef) && (is_defined (get n))
+
+let rec random_sample t =
+  let aux i x accu = List.map (fun (t1,t2) -> (i,t1,t2)) (dnf_trans x) @ accu in
+  let tr = Pt.Map.fold aux t.trans (aux (-1) t.def []) in
+  let l = List.length tr in
+  if t.eps && (l = 0 || Random.int 2 = 0) then Eps
+  else let (i,t1,t2) = List.nth tr (Random.int l) in
+  Elt (i,random_sample t1,random_sample t2)

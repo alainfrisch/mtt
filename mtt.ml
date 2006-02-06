@@ -41,11 +41,14 @@ and expr_descr =
   | EError
 
 let rec print_expr ppf e = match e.descr with
-  | EVal _ -> Format.fprintf ppf "Val"
-  | EElt _ -> Format.fprintf ppf "Elt"
-  | ECopyTag (e1,e2) -> Format.fprintf ppf "CopyTag(%a,%a)" print_expr e1 print_expr e2
+  | EVal v -> Ta.print_v ppf v
+  | EElt (t,e1,e2) -> 
+      Format.fprintf ppf "%s[%a],%a" (Ta.string_of_atom t) 
+	print_expr e1 print_expr e2
+  | ECopyTag (e1,e2) -> 
+      Format.fprintf ppf "_[%a],%a" print_expr e1 print_expr e2
   | ECopy -> Format.fprintf ppf "Copy"
-  | EVar _ -> Format.fprintf ppf "Var"
+  | EVar x -> Format.fprintf ppf "%s" (string_of_var x)
   | ELet (_,e) -> Format.fprintf ppf "Let(%a)" print_expr e
   | ELetN _ -> Format.fprintf ppf "LetN"
   | ECond (_,_,e1,e2) -> Format.fprintf ppf "Cond(%i,%i)" e1.uid e2.uid
@@ -216,6 +219,31 @@ let replace_raise memo i exn =
   Memo.replace memo i (Exn exn);
   raise exn
 
+let dump_all () =
+  let h = Hashtbl.create 1024 in
+  Memo.iter
+    (fun (env,uid,t) r ->
+       match r with Exn _ -> ()
+	 | Type r ->
+       let c = 
+	 try Hashtbl.find h uid
+	 with Not_found -> let c = ref [] in Hashtbl.add h uid c; c
+       in
+       c := (env,t,r) :: !c
+    ) infer_memo;
+  Hashtbl.iter
+    (fun uid c ->
+       if List.length !c >= 2 then
+       List.iter
+	 (fun (env,t,r) ->
+	    Format.fprintf Format.std_formatter
+	      "UID=%i@.ENV:@.%aT=%aR=%a========================@."
+	      uid print_env env Ta.print t Ta.print r)
+	 !c
+    )
+    h
+    	 
+
 let rec infer env e t () =
   if Ta.is_empty t then Ta.empty
   else  
@@ -223,6 +251,7 @@ let rec infer env e t () =
     let i = (env,e.uid,t) in
     try 
       let r = find_raise infer_memo i in
+
       if r != Ta.empty && is_empty r then replace infer_memo i Ta.empty 
       else if r != Ta.any && is_any r then replace infer_memo i Ta.any
       else if r != Ta.noneps && is_noneps r then replace infer_memo i Ta.noneps
@@ -396,7 +425,7 @@ let rec eval env e v = match e.descr with
       eval env' e2 v
   | ECond (e,t,e1,e2) ->
       eval env (if Ta.is_in (eval env e v) t then e1 else e2) v
-  | ERand t -> Ta.sample t
+  | ERand t -> Ta.random_sample t
   | ESub (dir,e) ->
       (match v with
 	 | Ta.Eps -> raise Error
@@ -406,6 +435,15 @@ let rec eval env e v = match e.descr with
 	
 let eval = eval Env.empty
 
+let eval_avoid e v t =
+  let rec aux remain =
+    if remain = 0 then raise Not_found
+    else 
+      let v' = eval e v in
+      if Ta.is_in v' t then aux (pred remain)
+      else v'
+  in
+  aux 10000
 
 let check_compose e =
   match e.descr with
@@ -427,3 +465,5 @@ let check_wf e0 =
   in
   try aux e0
   with Exit -> Printf.eprintf "Unguarded recursion\n"; exit 1
+
+
