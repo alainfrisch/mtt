@@ -421,7 +421,7 @@ and norm_aux tr =
        Trans.(|||) accu (Trans.(&&&) t1 t2)
     )
     Trans.zero
-    ((*normalize_dnf*) (dnf_trans tr))
+    (dnf_trans tr)
 
 let normalize t = (normalize t).descr
 
@@ -448,33 +448,6 @@ and norm_aux tr =
     (normalize_dnf (dnf_trans tr))
 
 let normalize2 t = (normalize2 (normalize t)).descr
-
-(*
-let normalize2_memo = Memo.create 4096
-
-let rec normalize2 t =
-  try Memo.find normalize2_memo t
-  with Not_found ->
-(*    Format.fprintf Format.std_formatter "Normalize (uid=%i):%a@." 
-      (Trans.uid t.trans)
-      print t; *)
-    let t' = mk () in
-    Memo.add normalize2_memo t t';
-    t'.atoms <- t.atoms;
-    t'.trans <- 
-      List.fold_left
-      (fun accu (t1,t2) ->
-	 Trans.(|||) accu 
-	   (Trans.(&&&) (Trans.(!!!) (Fst (normalize2 t1)))
-	      (Trans.(!!!) (Snd (normalize2 t2))))
-      )
-      Trans.zero
-      (normalize_dnf (dnf_trans t.trans));
-    t'.undef <- false;
-    Memo.add normalize2_memo t' t';
-    t'
-*)
-
 
 let rec print_v ppf = function
   | Elt (i,v1,v2) -> 

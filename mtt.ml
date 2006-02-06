@@ -140,9 +140,11 @@ exception Refine of var * Ta.t
 module Memo = Hashtbl.Make(Input)
 let infer_memo = Memo.create 4096
 let infer_stack = ref []
+let memo = (infer_memo,infer_stack)
 
-let nodes_memo : Ta.node res Memo.t = Memo.create 4096
+let nodes_memo = Memo.create 4096
 let nodes_stack = ref []
+let nodes = (nodes_memo,nodes_stack)
 
 let is_empty t =
   try Ta.is_empty t
@@ -198,52 +200,45 @@ let backtrack (old_stack,old_nodes) =
   unstack' old_nodes !nodes_stack; 
   nodes_stack := old_nodes
 
+let find_raise memo i =
+  match Memo.find memo i with Type t -> t | Exn exn -> raise exn
 
+let push (memo,stack) i r =
+  Memo.replace memo i (Type r);
+  stack := i :: !stack;
+  r
+
+let replace memo i r =
+  Memo.replace memo i (Type r);
+  r
+
+let replace_raise memo i exn =
+  Memo.replace memo i (Exn exn);
+  raise exn
 
 let rec infer env e t () =
   if Ta.is_empty t then Ta.empty
   else  
     let env = Env.restrict env (fv e) in
-    assert(VarSet.subset (Env.domain env) (fv e));
     let i = (env,e.uid,t) in
     try 
-      let r = 
-	match Memo.find infer_memo i with Type t -> t | Exn exn -> raise exn
-      in
-      let r = 
-	if is_empty r then Ta.empty 
-	else if is_any r then Ta.any
-	else if is_noneps r then Ta.noneps
-	else if is_eps r then Ta.eps else r in
-      Memo.replace infer_memo i (Type r);
-      r
-     
+      let r = find_raise infer_memo i in
+      if r != Ta.empty && is_empty r then replace infer_memo i Ta.empty 
+      else if r != Ta.any && is_any r then replace infer_memo i Ta.any
+      else if r != Ta.noneps && is_noneps r then replace infer_memo i Ta.noneps
+      else if r != Ta.eps && is_eps r then replace infer_memo i Ta.eps 
+      else r
     with Not_found -> 
       try 
-(*	Format.fprintf Format.std_formatter
-	  "Begin infer for expr %i(%a), output %a@."
-	  e.uid print_expr e
-	  Ta.print t; *)
 	let r = infer_descr env e t in 
 	let r = 
 	  if is_empty r then Ta.empty 
 	  else if is_any r then Ta.any
 	  else if is_noneps r then Ta.noneps
 	  else if is_eps r then Ta.eps else r in
-(*	Format.fprintf Format.std_formatter
-	  "Infer for expr %i(%a), output %a%a===>%a-----------------@."
-	  e.uid print_expr e
-	  Ta.print t print_env env Ta.print r; *)
-	Memo.replace infer_memo i (Type r);
-	infer_stack := i :: !infer_stack;
-	r
+	push memo i r
       with (Refine _) as exn ->
-(*	Format.fprintf Format.std_formatter
-	  "Infer for expr %i(%a), output %aFAILED@."
-	  e.uid print_expr e
-	  Ta.print t; *)
-	Memo.replace infer_memo i (Exn exn);
-	raise exn
+	replace_raise infer_memo i exn
 
 and infer_descr env e t = match e.descr with
   | EVal v -> if Ta.is_in v t then Ta.any else Ta.empty
@@ -254,8 +249,8 @@ and infer_descr env e t = match e.descr with
   | ECopyTag (e1,e2) -> infer_copytag env e1 e2 t
   | EElt (i,e1,e2) -> infer_elt env i e1 e2 t
   | ESub (dir,e) -> infer_sub env dir e t
-  | ELet (binds,e2) -> infer_let env binds e2 t
-  | ELetN (binds,e2) -> infer_letn env binds e2 t
+  | ELet (binds,e2) -> infer_let false env binds e2 t
+  | ELetN (binds,e2) -> infer_let true env binds e2 t
   | ECompose (e1,e2) -> 
       let t1 = infer env e2 t () in
 (*      let t1 = Ta.neg (Ta.normalize (Ta.neg t1)) in *)
@@ -318,32 +313,27 @@ and infer_cond env e t' e1 e2 t =
 	() 
 
 and infer_sub env dir e t =
-  try
-    let n = Memo.find nodes_memo (env,e.uid,t) in
-    (match n with Exn exn -> raise exn | Type n -> sub dir n)
+  try sub dir (find_raise nodes_memo (env,e.uid,t))
   with Not_found ->
-    let n = Ta.mk () in
-    Memo.add nodes_memo (env,e.uid,t) (Type n);
-    nodes_stack := (env,e.uid,t) :: !nodes_stack;
-(*    Format.fprintf Format.std_formatter "Create node %i for expr %i, dir %i, output type:%a" (Ta.uid n) e.uid (match dir with Fst -> 0 | Snd -> 1) Ta.print t; *)
+    let n = push nodes (env,e.uid,t) (Ta.mk ()) in
     (try Ta.def n (infer env e t ())
-     with exn -> Memo.replace nodes_memo (env,e.uid,t) (Exn exn); raise exn);
+     with exn -> replace_raise nodes_memo (env,e.uid,t) exn);
     sub dir n
 
-and infer_let env binds e2 t =
+and infer_let cbn env binds e2 t =
   let rec aux t1 env' = function
-    | [] -> Ta.inter t1 (infer_let_aux env binds env' e2 t ())
+    | [] -> 
+	Ta.inter t1 
+	  ((if cbn then infer_letn_aux else infer_let_aux) env binds env' e2 t ())
     | (x,e1)::rest ->
 	let env' = Env.add x (Ta.any,[]) env' 
 	and t1 = Ta.inter t1 (infer env e1 Ta.any ()) in
 	if is_empty t1 then Ta.empty else aux t1 env' rest
   in
   aux Ta.any env binds
-  
+
 and infer_let_aux env binds env' e2 t () =
   let ckpt = checkpoint () in
-(*  Format.fprintf Format.std_formatter
-    "Let %aoutput %a" print_env env' Ta.print t; *)
   match (try Type (infer env' e2 t ()) with exn -> Exn exn) with
     | Type t2 -> 
 	let rec aux accu = function
@@ -356,8 +346,6 @@ and infer_let_aux env binds env' e2 t () =
 	aux t2 binds
 
     | Exn (Refine (x,tx)) when List.mem_assq x binds ->
-(*	Format.fprintf Format.std_formatter
-	  "Refine %aCurrent %a---------@." Ta.print tx Ta.print (fst (Env.find x env')); *)
 	backtrack ckpt;
 	inter 
 	  (infer_let_aux env binds 
@@ -367,16 +355,6 @@ and infer_let_aux env binds env' e2 t () =
 	  ()
     | Exn exn -> raise exn
 
-and infer_letn env binds e2 t =
-  let rec aux t1 env' = function
-    | [] -> Ta.inter t1 (infer_letn_aux env binds env' e2 t ())
-    | (x,e1)::rest ->
-	let env' = Env.add x (Ta.any,[]) env' 
-	and t1 = Ta.inter t1 (infer env e1 Ta.any ()) in
-	if is_empty t1 then Ta.empty else aux t1 env' rest
-  in
-  aux Ta.any env binds
-  
 and infer_letn_aux env binds env' e2 t () =
   let ckpt = checkpoint () in
   try infer env' e2 t ()
