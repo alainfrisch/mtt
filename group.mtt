@@ -21,4 +21,8 @@ expr Drop =
 
 eval (b[],a[],b[],b[b[],a[],b[b[]]]; Group)
 
+(*
 check Group: I -> O
+*)
+
+infer (if Group in c[Any] then if Copy in I then a[] else b[] else b[]) in a[]
