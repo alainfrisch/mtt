@@ -1,5 +1,5 @@
 Package name: mtt
-Author: Alain Frisch <Alain.Frisch@inria.fr>.
+Author: Alain Frisch <alain@frisch.fr>.
 License: see the LICENSE file.
 
 This package implements a simple transformation language for XML
@@ -46,7 +46,7 @@ Theory
 The expressive power of programs is roughly similar to the
 theoretical notion of macro-tree transducers (call-by-name and/or
 call-by-value), plus the
-following features: 
+following features:
 - regular look-ahead (actually, the look-ahead can be done on the
   result of some transducer applied to the input, not necessarily
   the input itself);
